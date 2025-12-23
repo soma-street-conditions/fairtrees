@@ -33,9 +33,17 @@ def get_reverse_supervisor_map():
     return rev
 
 def get_valid_image_url(media_item):
-    if not media_item: return None
+    """Safely extracts image URL and prevents AttributeError on non-string data."""
+    if not media_item: 
+        return None
+    
+    # Extract URL if it's a dictionary, otherwise use as is
     url = media_item.get('url') if isinstance(media_item, dict) else media_item
-    if not url: return None
+    
+    # Crucial Fix: Ensure url is a string before calling .split() or .lower()
+    if not isinstance(url, str):
+        return None
+        
     clean_url = url.split('?')[0].lower()
     if clean_url.endswith(('.jpg', '.jpeg', '.png', '.gif', '.webp')):
         return url
@@ -45,7 +53,6 @@ def load_data(district_id):
     """Fetches tree basin records closed in the last 18 months."""
     eighteen_months_ago = (datetime.now() - timedelta(days=548)).strftime('%Y-%m-%dT%H:%M:%S')
     
-    # Query for any tree basin tasks closed in the window
     where_clause = (
         f"closed_date > '{eighteen_months_ago}' "
         "AND agency_responsible LIKE '%PW%' "
@@ -128,7 +135,7 @@ def main():
 
     st.markdown("---")
     
-    # --- Image Grid (Restored Original Components) ---
+    # --- Image Grid (Original Logic Restored) ---
     COLS_PER_ROW = 4
     cols = st.columns(COLS_PER_ROW)
 
@@ -138,7 +145,6 @@ def main():
             with st.container(border=True):
                 st.image(row['valid_image'], use_container_width=True)
                 
-                # --- ORIGINAL REVERTED LOGIC ---
                 opened_str = row['requested_datetime'].strftime('%m/%d/%y') if pd.notnull(row['requested_datetime']) else "?"
                 closed_str = row['closed_date'].strftime('%m/%d/%y') if pd.notnull(row['closed_date']) else "?"
                 
@@ -153,15 +159,9 @@ def main():
                 short_addr = addr_clean.split(',')[0]
                 map_url = f"https://www.google.com/maps/search/?api=1&query={addr_clean.replace(' ', '+')}"
                 
-                # Handling status notes as in original code
-                status_notes = str(row.get('status_notes', ''))
-                note_display = status_notes[:50] + "..." if len(status_notes) > 50 else status_notes
-
-                # Render Original Design
                 st.markdown(f"**[{short_addr}]({map_url})**")
                 st.caption(f"Opened: {opened_str} | Closed: {closed_str}")
                 st.caption(f"Days Open: {days_open}")
-                # st.caption(f"*{note_display}*") # Re-uncomment if you'd like to see the note preview
                 st.markdown(f"[View Ticket {ticket_id}]({ticket_url})")
 
 if __name__ == "__main__":

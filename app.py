@@ -27,7 +27,7 @@ st.markdown("""
     <style>
         div[data-testid="stVerticalBlock"] > div { gap: 0.2rem; }
         .metric-container {
-            background-color: #0E1117; /* Dark theme background */
+            background-color: #0E1117; 
             border: 1px solid #303030;
             border-radius: 5px;
             padding: 15px;
@@ -39,10 +39,9 @@ st.markdown("""
             color: #FFFFFF;
             line-height: 1.6;
         }
-        /* Make images fill their container nicely */
         div[data-testid="stImage"] > img {
             object-fit: cover; 
-            height: 200px; /* Enforce uniform height */
+            height: 200px;
             width: 100%;
         }
     </style>
@@ -63,15 +62,15 @@ def load_data(district_id):
     # Logic: 18 months rolling window
     eighteen_months_ago = (datetime.now() - timedelta(days=548)).strftime('%Y-%m-%dT%H:%M:%S')
     
-    # [cite_start]Select only columns defined in the schema [cite: 60]
     select_cols = (
         "service_request_id, requested_datetime, closed_date, "
         "service_details, status_notes, address, media_url, supervisor_district"
     )
 
-    # [cite_start]Filtering for specific tree basin tasks [cite: 60]
+    # Filtering for specific tree basin tasks
     details_filter = "(service_details = 'backfill_tree_basin' OR service_details = 'empty_tree_basin')"
     
+    # RESTORED: "PW" Filter. This ensures we only look at Public Works data, reducing the denominator.
     params = {
         "$select": select_cols,
         "$where": f"closed_date > '{eighteen_months_ago}' AND agency_responsible LIKE '%PW%' AND {details_filter}",
@@ -80,7 +79,6 @@ def load_data(district_id):
     }
 
     if district_id != "Citywide":
-        # Schema lists supervisor_district as Number, but quotes often safe in SoQL
         params["$where"] += f" AND supervisor_district = '{district_id}'"
 
     try:
@@ -101,14 +99,9 @@ def load_data(district_id):
         return pd.DataFrame()
 
 def get_valid_image_url(media_item):
-    [cite_start]"""Parses media_url column [cite: 60] to find valid images."""
     if not media_item: return None
-    
-    # Handle case where API returns a dictionary wrapper vs raw string
     url = media_item.get('url') if isinstance(media_item, dict) else media_item
-    
     if not url: return None
-        
     clean_url = url.split('?')[0].lower()
     if clean_url.endswith(('.jpg', '.jpeg', '.png', '.gif', '.webp')):
         return url
@@ -124,7 +117,6 @@ def main():
     query_params = st.query_params
     url_district = query_params.get("district", "Citywide")
     
-    # Validate URL param
     if url_district not in SUPERVISOR_MAP and url_district != "Citywide":
         url_district = "Citywide"
 
@@ -139,7 +131,6 @@ def main():
             index=get_supervisor_options().index(current_label)
         )
 
-    # Sync Selection with URL
     selected_id = rev_map[selected_label]
     if selected_id == "Citywide":
         if "district" in st.query_params:
@@ -153,25 +144,24 @@ def main():
     with st.spinner("Fetching data..."):
         df = load_data(selected_id)
 
-    # --- Stats Calculation ---
     if df.empty:
         st.warning("No records found matching criteria.")
         return
 
-    # 1. Total Denominator (All backfill/empty tree basins in range)
+    # --- STATS CALCULATION ---
     total_records = len(df)
     
-    # 2. Numerator (Cancelled only)
-    # Ensure status_notes is string before comparison
+    # Ensure status_notes is string
     df['status_notes'] = df['status_notes'].astype(str)
-    cancelled_mask = df['status_notes'] == 'Cancelled - Planned Maintenance'
+    
+    # Fuzzy match catches "Cancelled - Planned Maintenance" and variations
+    cancelled_mask = df['status_notes'].str.contains("Planned Maintenance", case=False, na=False)
+    
     cancelled_df = df[cancelled_mask].copy()
     cancelled_count = len(cancelled_df)
-    
     percentage = (cancelled_count / total_records * 100) if total_records > 0 else 0
 
-    # 3. Visual Feed Count (Cancelled + Has Image)
-    # We apply the image validator now to get the count for the third stat line
+    # Count images
     cancelled_df['valid_image'] = cancelled_df['media_url'].apply(get_valid_image_url)
     display_df = cancelled_df.dropna(subset=['valid_image'])
     display_count = len(display_df)
@@ -181,8 +171,8 @@ def main():
         f"""
         <div class='metric-container'>
             <span class='metric-text'>
-                Found <b>{total_records:,}</b> records total (backfill/empty basin only).<br>
-                <b>{cancelled_count:,}</b> were "Cancelled - Planned Maintenance" ({percentage:.1f}% of total).<br>
+                Found <b>{total_records:,}</b> records total (Public Works Only).<br>
+                <b>{cancelled_count:,}</b> matches for "Planned Maintenance" ({percentage:.1f}% of total).<br>
                 <span style="font-size: 0.95rem; opacity: 0.8;">Showing <b>{display_count:,}</b> records that have photos.</span>
             </span>
         </div>
@@ -202,13 +192,10 @@ def main():
 
     for i, (index, row) in enumerate(display_df.iterrows()):
         col = cols[i % COLS_PER_ROW]
-        
         with col:
             with st.container(border=True):
-                # Display the image
                 st.image(row['valid_image'], use_container_width=True)
                 
-                # --- Card Details ---
                 opened_str = row['requested_datetime'].strftime('%m/%d/%y') if pd.notnull(row['requested_datetime']) else "?"
                 closed_str = row['closed_date'].strftime('%m/%d/%y') if pd.notnull(row['closed_date']) else "?"
                 
@@ -222,13 +209,14 @@ def main():
                 addr_clean = row.get('address', 'Location N/A')
                 short_addr = addr_clean.split(',')[0]
                 map_url = f"https://www.google.com/maps/search/?api=1&query={addr_clean.replace(' ', '+')}"
+                
+                # Check actual note for this specific row
+                note_display = row['status_notes'][:50] + "..." if len(row['status_notes']) > 50 else row['status_notes']
 
-                # Text Content
                 st.markdown(f"**[{short_addr}]({map_url})**")
                 st.caption(f"Opened: {opened_str} | Closed: {closed_str}")
                 st.caption(f"Days Open: {days_open}")
-                
-                # Link to Ticket
+                # st.caption(f"*{note_display}*") # Uncomment if you want to see notes in cards
                 st.markdown(f"[View Ticket {ticket_id}]({ticket_url})")
 
 if __name__ == "__main__":

@@ -14,12 +14,10 @@ st.markdown("""
         div.stButton > button { width: 100%; }
         .stCaption a { text-decoration: underline; color: #1f77b4; }
         
-        /* Stats Text: White */
-        .metric-text { 
-            font-size: 1.1rem; 
-            font-weight: 500; 
-            color: white; 
-            padding: 10px 0px; 
+        /* Stats Text: Enforce White Color */
+        .metric-container {
+            background-color: transparent;
+            padding: 10px 0px;
         }
     </style>
     <meta name="robots" content="noindex, nofollow">
@@ -76,117 +74,76 @@ st.markdown("---")
 eighteen_months_ago = (datetime.now() - timedelta(days=548)).strftime('%Y-%m-%dT%H:%M:%S')
 base_url = "https://data.sfgov.org/resource/vw6y-z8j6.json"
 
-# --- HELPER: ROBUST FILTERING ---
-def filter_dataframe(df):
-    """
-    Python-side filtering to guarantee accuracy.
-    Checks multiple potential column names for the request details.
-    """
-    if df.empty: return df
-    
-    # 1. Identify the 'Details' column
-    # API usually uses 'service_details', but sometimes 'request_details' or 'service_subtype'
-    possible_cols = ['service_details', 'request_details', 'service_subtype']
-    target_col = next((c for c in possible_cols if c in df.columns), None)
-    
-    if not target_col:
-        return pd.DataFrame() # Can't filter if column missing
-    
-    # 2. Convert to string and lowercase
-    df[target_col] = df[target_col].astype(str).str.lower()
-    
-    # 3. Strict Inclusion List
-    targets = ['backfill_tree_basin', 'empty_tree_basin']
-    
-    # Filter rows where the column contains either target string
-    mask = df[target_col].isin(targets)
-    return df[mask]
+# --- API QUERY ---
+# Logic: Fetch ALL closed cases for 'tree_basin' regardless of status.
+# We use strict equality in the API to ensure we get exactly what we want.
+details_filter = "(service_details = 'backfill_tree_basin' OR service_details = 'empty_tree_basin')"
 
-# 4. FETCH ALL STATS DATA (The Denominator)
-# We fetch metadata for ALL matching cases (with/without images) to get the total count.
-# We use a 'LIKE' query to be nice to the API, then strict filter in Python.
-stats_where = (
-    f"closed_date > '{eighteen_months_ago}' "
-    f"AND agency_responsible LIKE '%PW%' "
-    f"AND service_details LIKE '%tree_basin%'" # Efficient API pre-filter
-)
+params = {
+    "$where": f"closed_date > '{eighteen_months_ago}' AND agency_responsible LIKE '%PW%' AND {details_filter}",
+    "$limit": 50000, # Fetch everything
+    "$order": "closed_date DESC"
+}
 
 if selected_id != "Citywide":
-    stats_where += f" AND supervisor_district = '{selected_id}'"
+    params["$where"] += f" AND supervisor_district = '{selected_id}'"
 
 @st.cache_data(ttl=300)
-def get_stats_data(where_clause):
-    # Fetch enough columns to filter and count status
-    params = {
-        "$select": "closed_date, status_notes, service_details, service_subtype",
-        "$where": where_clause,
-        "$limit": 50000 # Effectively no limit
-    }
+def get_data(query_params):
     try:
-        r = requests.get(base_url, params=params)
+        r = requests.get(base_url, params=query_params)
         if r.status_code == 200:
-            raw_df = pd.DataFrame(r.json())
-            return filter_dataframe(raw_df)
-        return pd.DataFrame()
-    except:
+            df = pd.DataFrame(r.json())
+            return df
+        else:
+            st.error(f"API Error {r.status_code}: {r.text}")
+            return pd.DataFrame()
+    except Exception as e:
+        st.error(f"Connection Error: {e}")
         return pd.DataFrame()
 
-stats_df = get_stats_data(stats_where)
+df = get_data(params)
 
 # --- CALCULATE STATS ---
 total_records = 0
 cancelled_count = 0
 percentage = 0.0
 
-if not stats_df.empty:
-    total_records = len(stats_df)
+if not df.empty:
+    total_records = len(df)
     
-    # Count specific cancellations
-    # Normalize status_notes just in case
-    if 'status_notes' in stats_df.columns:
-        cancelled_mask = stats_df['status_notes'].astype(str) == 'Cancelled - Planned Maintenance'
-        cancelled_count = len(stats_df[cancelled_mask])
-    
+    # Identify Cancellations
+    # We look for "Cancelled - Planned Maintenance" in the status notes
+    if 'status_notes' in df.columns:
+        cancelled_mask = df['status_notes'].astype(str) == 'Cancelled - Planned Maintenance'
+        cancelled_count = len(df[cancelled_mask])
+        
+        # Filter the DataFrame for display (User likely only wants to see the cancelled ones in the grid)
+        # If you want to see ALL rows in the grid, comment out the next line.
+        display_df = df[cancelled_mask].copy() 
+    else:
+        display_df = pd.DataFrame()
+
     if total_records > 0:
         percentage = (cancelled_count / total_records) * 100
+else:
+    display_df = pd.DataFrame()
 
+# --- DISPLAY STATS (White Text) ---
 st.markdown(
     f"""
-    <div class='metric-text'>
-        Found <b>{total_records:,}</b> records total (backfill/empty basin only).<br>
-        <b>{cancelled_count:,}</b> were "Cancelled - Planned Maintenance" ({percentage:.1f}% of total).
+    <div class='metric-container'>
+        <span style='font-size: 1.1rem; font-weight: 500; color: #FFFFFF !important;'>
+            Found <b>{total_records:,}</b> records total (backfill/empty basin only).<br>
+            <b>{cancelled_count:,}</b> were "Cancelled - Planned Maintenance" ({percentage:.1f}% of total).
+        </span>
     </div>
     """, 
     unsafe_allow_html=True
 )
 st.markdown("---")
 
-# 5. FETCH FEED DATA (The Images)
-# Stricter query: Must be Cancelled AND have Image
-feed_where = stats_where + " AND status_notes = 'Cancelled - Planned Maintenance' AND media_url IS NOT NULL"
-
-@st.cache_data(ttl=300)
-def get_feed_data(where_clause):
-    params = {
-        "$where": where_clause,
-        "$order": "closed_date DESC",
-        "$limit": 50000 # No pagination
-    }
-    try:
-        r = requests.get(base_url, params=params)
-        if r.status_code == 200:
-            raw_df = pd.DataFrame(r.json())
-            return filter_dataframe(raw_df)
-        else:
-            st.error(f"API Error {r.status_code}")
-            return pd.DataFrame()
-    except Exception as e:
-        st.error(f"Error: {e}")
-        return pd.DataFrame()
-
-df = get_feed_data(feed_where)
-
-# 6. Helper: Identify Image
+# 4. Helper: Identify Image
 def get_image_info(media_item):
     if not media_item: return None, False
     url = media_item.get('url') if isinstance(media_item, dict) else media_item
@@ -196,16 +153,16 @@ def get_image_info(media_item):
         return url, True
     return url, False
 
-# 7. Display Feed
-if not df.empty:
+# 5. Display Feed
+if not display_df.empty:
     cols = st.columns(4)
     display_count = 0
     
-    # Identify the correct column for details again for display
+    # Identify the details column
     possible_cols = ['service_details', 'request_details', 'service_subtype']
-    details_col = next((c for c in possible_cols if c in df.columns), 'service_details')
+    details_col = next((c for c in possible_cols if c in display_df.columns), 'service_details')
 
-    for index, row in df.iterrows():
+    for index, row in display_df.iterrows():
         full_url, is_viewable = get_image_info(row.get('media_url'))
         
         if full_url and is_viewable:
@@ -251,7 +208,7 @@ if not df.empty:
             display_count += 1
             
     if display_count == 0:
-        st.info("Records found, but no viewable images could be extracted.")
+        st.info("No viewable images found for the cancelled records.")
     
 else:
     if selected_id != "Citywide":

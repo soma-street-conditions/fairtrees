@@ -72,8 +72,8 @@ st.markdown("---")
 eighteen_months_ago = (datetime.now() - timedelta(days=548)).strftime('%Y-%m-%dT%H:%M:%S')
 base_url = "https://data.sfgov.org/resource/vw6y-z8j6.json"
 
-# --- BASE FILTER (Applies to BOTH Metrics and Feed) ---
-# This ensures the denominator only includes relevant ticket types
+# --- CATEGORY EXCLUSIONS ---
+# These are filtered out of BOTH the counts and the feed.
 excluded_details = """(
     'blocking_sidewalk', 
     'blocking_street_lights', 
@@ -81,22 +81,34 @@ excluded_details = """(
     'other', 
     'blocking_signs', 
     'property_damage', 
-    'hitting_window_or_building'
+    'hitting_window_or_building',
+    'about_to_fall',
+    'fallen_tree',
+    'weeding',
+    'blocking_traffic_signal'
 )"""
 
-base_where = (
+# --- METRICS QUERY ---
+# Logic: "Total universe of relevant tickets"
+# - Date > 18 months
+# - Agency = PW
+# - NOT in excluded categories
+# - INCLUDES items without photos (to get accurate denominator)
+# - INCLUDES all closure reasons (to get total)
+
+metrics_where = (
     f"closed_date > '{eighteen_months_ago}' "
-    f"AND media_url IS NOT NULL "
     f"AND agency_responsible LIKE '%PW%' "
     f"AND service_details NOT IN {excluded_details}"
 )
 
 if selected_id != "Citywide":
-    base_where += f" AND supervisor_district = '{selected_id}'"
+    metrics_where += f" AND supervisor_district = '{selected_id}'"
 
-# 4. Fetch Metrics (The Counts)
+# 4. Fetch Metrics
 @st.cache_data(ttl=300)
 def get_metrics(where_clause):
+    # Only fetch counts, grouped by status. Very efficient.
     params = {
         "$select": "status_notes, count(*)",
         "$where": where_clause,
@@ -111,7 +123,7 @@ def get_metrics(where_clause):
     except:
         return pd.DataFrame()
 
-metrics_df = get_metrics(base_where)
+metrics_df = get_metrics(metrics_where)
 
 # Calculate Stats
 total_records = 0
@@ -121,9 +133,10 @@ percentage = 0.0
 if not metrics_df.empty:
     metrics_df['count'] = pd.to_numeric(metrics_df['count'])
     
-    # Total is sum of ALL tickets that met the base criteria (including exclusions)
+    # Total = Sum of ALL tickets matching criteria (regardless of status/photo)
     total_records = metrics_df['count'].sum()
     
+    # Cancelled = Just the 'Cancelled - Planned Maintenance' subset (regardless of photo)
     target_row = metrics_df[metrics_df['status_notes'] == 'Cancelled - Planned Maintenance']
     if not target_row.empty:
         cancelled_count = target_row['count'].iloc[0]
@@ -143,8 +156,12 @@ st.markdown(
 st.markdown("---")
 
 # 5. Fetch Feed Data
-# Add the specific status note filter for the grid display
-feed_where = base_where + " AND status_notes = 'Cancelled - Planned Maintenance'"
+# --- FEED QUERY ---
+# Logic: "Show me the photos"
+# - Start with the same base criteria as metrics (Date, Agency, Exclusions)
+# - ADD: Status = 'Cancelled - Planned Maintenance'
+# - ADD: Media URL IS NOT NULL (Strict API filter)
+feed_where = metrics_where + " AND status_notes = 'Cancelled - Planned Maintenance' AND media_url IS NOT NULL"
 
 params = {
     "$where": feed_where,
@@ -216,7 +233,7 @@ if not df.empty:
                     short_address = address.split(',')[0]
                     map_url = f"https://www.google.com/maps/search/?api=1&query={address.replace(' ', '+')}"
 
-                    # --- RENDER TEXT (Address First) ---
+                    # --- RENDER TEXT ---
                     st.markdown(f"[{short_address}]({map_url})")
                     
                     st.markdown(f"Opened {opened_str}, Closed {closed_str}")
@@ -224,7 +241,7 @@ if not df.empty:
                     
                     st.caption(f"**Request Details:** {details}")
                     st.caption(f"**Status Notes:** {notes_display}")
-                    
+            
             display_count += 1
             
     if display_count == 0:

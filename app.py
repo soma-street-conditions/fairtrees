@@ -51,7 +51,7 @@ st.markdown("""
 # --- 3. HELPER FUNCTIONS ---
 
 @st.cache_data(ttl=600)
-def load_data_v8(district_id):
+def load_data_v9(district_id):
     eighteen_months_ago = (datetime.now() - timedelta(days=548)).strftime('%Y-%m-%dT%H:%M:%S')
     
     select_cols = (
@@ -97,8 +97,7 @@ def load_data_v8(district_id):
 
 def get_valid_image_url(media_item):
     """
-    Validates URL. Now specifically ALLOWS Verint URLs to pass through
-    so they can be fixed later.
+    Validates URL. Allows Verint URLs to pass so they can be fixed.
     """
     if not media_item: return None
     url = media_item.get('url') if isinstance(media_item, dict) else media_item
@@ -106,11 +105,9 @@ def get_valid_image_url(media_item):
     
     clean_url = url.split('?')[0].lower()
     
-    # 1. Standard Image Check
     if clean_url.endswith(('.jpg', '.jpeg', '.png', '.webp')):
         return url
         
-    # 2. Verint Check (Allow these through!)
     if "verintcloudservices" in clean_url:
         return url
         
@@ -119,24 +116,49 @@ def get_valid_image_url(media_item):
 @st.cache_data(ttl=3600, show_spinner=False)
 def fix_verint_url(ticket_id, original_url):
     """
-    If the URL is a broken Verint link, ask Open311 for the Cloudinary link.
+    Resolves broken Verint links by querying Open311.
+    PRIORITIZES:
+    1. The last image in 'extended_attributes' (usually the user photo).
+    2. Any image in 'extended_attributes'.
+    3. The main 'media_url' (if it's not a composite stitch).
     """
+    # If it's already a good Cloudinary link, just keep it
     if "verintcloudservices" not in str(original_url):
         return original_url
 
     try:
-        # Call Open311 API
         params = {"service_request_id": ticket_id, "extensions": "true"}
         r = requests.get(OPEN311_URL, params=params, timeout=3)
         data = r.json()
         
         if data and len(data) > 0:
-            new_url = data[0].get('media_url')
-            # Only swap if we actually got a Cloudinary/valid link back
-            if new_url and "cloudinary" in new_url:
-                return new_url
+            item = data[0]
+            
+            # --- STRATEGY A: Check extended attributes for multiple photos ---
+            ext_attrs = item.get('extended_attributes', {})
+            photos = ext_attrs.get('photos', [])
+            
+            if photos:
+                # 1. Try to find the LAST photo (usually the real one, not the map)
+                # We iterate backwards
+                for p in reversed(photos):
+                    p_url = p.get('media_url', '')
+                    # Simple filter: skip if it explicitly says "map" (just in case)
+                    if "cloudinary" in p_url and "_map" not in p_url:
+                        return p_url
+                
+                # 2. If all else fails, just take the last one available
+                return photos[-1].get('media_url')
+
+            # --- STRATEGY B: Fallback to main media_url ---
+            # But be careful of the "composite" images that start with complex transforms
+            primary_url = item.get('media_url')
+            if primary_url and "cloudinary" in primary_url:
+                # If it's one of those weird "c_limit,h_748..." stitched URLs, we might want to avoid it
+                # But if it's the only thing we have, we take it.
+                return primary_url
+                    
     except:
-        # On any error (timeout, connection), fail gracefully back to original
         pass
     
     return original_url
@@ -177,28 +199,25 @@ def main():
     st.query_params["district"] = selected_id
 
     # --- Load Data ---
-    df = load_data_v8(selected_id)
+    df = load_data_v9(selected_id)
 
     if df.empty:
         st.warning(f"No records found for {selected_label}.")
         return
 
-    # --- 1. STATISTICS (Unique Tickets Only) ---
+    # --- 1. STATISTICS ---
     unique_cases_df = df.drop_duplicates(subset=['service_request_id'])
     unique_count = len(unique_cases_df)
     
     if unique_count > 0:
         unique_cases_df['closure_reason'] = unique_cases_df['status_notes'].apply(get_category)
         
-        # Calculate Stats
         stats = unique_cases_df['closure_reason'].value_counts().reset_index()
         stats.columns = ['Closure Reason', 'Count']
-        
-        # Multiply by 100 for correct percentage bar formatting
         stats['Percentage'] = (stats['Count'] / unique_count) * 100
 
         st.markdown(f"##### Closure Reasons ({selected_label})")
-        st.caption(f"Denominator: {unique_count:,} unique tickets found in this district.")
+        st.caption(f"Denominator: {unique_count:,} unique tickets.")
         
         st.dataframe(
             stats,
@@ -217,19 +236,18 @@ def main():
             }
         )
     else:
-        st.info("No unique tickets found to calculate stats.")
+        st.info("No stats available.")
 
     st.markdown("---")
 
     # --- 2. IMAGE GALLERY ---
-    # Prepare potential images
     df['valid_image'] = df['media_url'].apply(get_valid_image_url)
     display_df = df.dropna(subset=['valid_image'])
     
-    # Filter A: Remove "Duplicate" status from images
+    # Filter A: Remove "Duplicate" status
     display_df = display_df[~display_df['status_notes'].str.contains("duplicate", case=False, na=False)]
     
-    # Filter B: Remove duplicate images (same photo used twice)
+    # Filter B: Deduplicate images
     display_df = display_df.drop_duplicates(subset=['valid_image'])
     
     image_count = len(display_df)
@@ -237,7 +255,7 @@ def main():
     st.markdown(f"#### 📸 Showing {image_count} cases with images")
 
     if display_df.empty:
-        st.info("No images found (duplicates hidden).")
+        st.info("No images found.")
         return
 
     COLS_PER_ROW = 4
@@ -247,16 +265,13 @@ def main():
         tile = cols[i % COLS_PER_ROW]
         with tile:
             with st.container(border=True):
-                # --- THE VERINT FIX ---
-                # Resolve URL if needed before displaying
+                # FIX VERINT URL
                 raw_url = row['valid_image']
                 ticket_id = row['service_request_id']
-                
                 final_image_url = fix_verint_url(ticket_id, raw_url)
                 
                 st.image(final_image_url, use_container_width=True)
                 
-                # Metadata
                 opened = row['requested_datetime']
                 closed = row['closed_date']
                 

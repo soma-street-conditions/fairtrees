@@ -12,9 +12,7 @@ st.markdown("""
         div[data-testid="stVerticalBlock"] > div { gap: 0.2rem; }
         .stMarkdown p { font-size: 0.9rem; margin-bottom: 0px; }
         div.stButton > button { width: 100%; }
-        /* Make links in captions stand out slightly */
         .stCaption a { text-decoration: underline; color: #1f77b4; }
-        /* Style for the metrics text */
         .metric-text { font-size: 1.1rem; font-weight: 500; color: #333; padding: 10px 0px; }
     </style>
     <meta name="robots" content="noindex, nofollow">
@@ -45,10 +43,9 @@ supervisor_map = {
 
 reverse_supervisor_map = {v: k for k, v in supervisor_map.items()}
 reverse_supervisor_map["Citywide"] = "Citywide"
-
 district_options = ["Citywide"] + list(supervisor_map.values())
 
-# --- FILTER LOGIC ---
+# --- FILTER UI ---
 query_params = st.query_params
 url_district_id = query_params.get("district", "Citywide")
 current_label = supervisor_map.get(url_district_id, "Citywide")
@@ -63,7 +60,6 @@ with col_filter:
 
 selected_id = reverse_supervisor_map.get(selected_label, "Citywide")
 
-# Update URL
 if selected_id == "Citywide":
     if "district" in st.query_params:
         del st.query_params["district"]
@@ -72,13 +68,23 @@ else:
 
 st.markdown("---")
 
-# 3. Date & Base API Setup
+# 3. Query Construction
 eighteen_months_ago = (datetime.now() - timedelta(days=548)).strftime('%Y-%m-%dT%H:%M:%S')
 base_url = "https://data.sfgov.org/resource/vw6y-z8j6.json"
 
-# Base Where Clause (Applies to BOTH Metrics and Feed)
-# Note: We do NOT filter by 'status_notes' here yet, because we need the total universe for stats
-base_where = f"closed_date > '{eighteen_months_ago}' AND media_url IS NOT NULL AND agency_responsible LIKE '%PW%'"
+# --- BASE FILTER (Applies to Metrics & Feed) ---
+# 1. Date > 18 months
+# 2. Has Image
+# 3. Agency is PW
+# 4. EXCLUDE specific service_details categories
+excluded_details = "('blocking_sidewalk', 'blocking_street_lights', 'damaged_vandalism', 'other')"
+
+base_where = (
+    f"closed_date > '{eighteen_months_ago}' "
+    f"AND media_url IS NOT NULL "
+    f"AND agency_responsible LIKE '%PW%' "
+    f"AND service_details NOT IN {excluded_details}"
+)
 
 if selected_id != "Citywide":
     base_where += f" AND supervisor_district = '{selected_id}'"
@@ -86,9 +92,6 @@ if selected_id != "Citywide":
 # 4. Fetch Metrics (The Counts)
 @st.cache_data(ttl=300)
 def get_metrics(where_clause):
-    # We query for counts grouped by status note to get the breakdown
-    # $select=status_notes, count(*)
-    # $group=status_notes
     params = {
         "$select": "status_notes, count(*)",
         "$where": where_clause,
@@ -111,22 +114,16 @@ cancelled_count = 0
 percentage = 0.0
 
 if not metrics_df.empty:
-    # Convert count to numeric
     metrics_df['count'] = pd.to_numeric(metrics_df['count'])
-    
-    # 1. Total records (Sum of all closure reasons)
     total_records = metrics_df['count'].sum()
     
-    # 2. Target records (Only "Cancelled - Planned Maintenance")
     target_row = metrics_df[metrics_df['status_notes'] == 'Cancelled - Planned Maintenance']
     if not target_row.empty:
         cancelled_count = target_row['count'].iloc[0]
     
-    # 3. Percentage
     if total_records > 0:
         percentage = (cancelled_count / total_records) * 100
 
-# DISPLAY METRICS
 st.markdown(
     f"""
     <div class='metric-text'>
@@ -138,8 +135,8 @@ st.markdown(
 )
 st.markdown("---")
 
-# 5. Fetch Data (The Feed)
-# Now we apply the specific status filter for the grid display
+# 5. Fetch Feed Data
+# Add the specific status note filter for the grid display
 feed_where = base_where + " AND status_notes = 'Cancelled - Planned Maintenance'"
 
 params = {
@@ -200,7 +197,7 @@ if not df.empty:
                     details = row.get('service_details', row.get('request_details', 'N/A'))
                     status_notes = row.get('status_notes', 'Closed')
                     
-                    # LINK GENERATION
+                    # Link Generation
                     ticket_id = row.get('service_request_id')
                     if ticket_id:
                         ticket_url = f"https://mobile311.sfgov.org/tickets/{ticket_id}"

@@ -4,7 +4,7 @@ import requests
 from datetime import datetime, timedelta
 
 # 1. Page Config
-st.set_page_config(page_title="SOMA Streets: Maintenance", page_icon="🚧", layout="wide")
+st.set_page_config(page_title="SF Streets: Maintenance", page_icon="🚧", layout="wide")
 
 # --- NO CRAWL & STYLING ---
 st.markdown("""
@@ -21,23 +21,21 @@ if 'limit' not in st.session_state:
     st.session_state.limit = 800
 
 # Header
-st.header("SOMA: Planned Maintenance Cancellations")
-st.write("Visualizing 311 reports closed as 'Cancelled - Planned Maintenance' by Public Works.")
+st.header("SF Citywide: Planned Maintenance Cancellations")
+st.write("Visualizing 311 reports closed as 'Cancelled - Planned Maintenance' by Public Works (Citywide).")
 st.markdown("---")
 
 # 3. Date & API Setup
-# Changed to 18 months (approx 548 days)
+# 18 months lookback
 eighteen_months_ago = (datetime.now() - timedelta(days=548)).strftime('%Y-%m-%dT%H:%M:%S')
 base_url = "https://data.sfgov.org/resource/vw6y-z8j6.json"
 
 # 4. Query
 # UPDATES:
-# - Filtered out blank closed dates (implied by closed_date > date check)
-# - Responsible Agency includes 'PW'
-# - Status Notes IS 'Cancelled - Planned Maintenance'
-# - Removed Homeless/Encampment filters
+# - REMOVED: analysis_neighborhood = 'South of Market'
+# - KEPT: closed_date > 18 months ago, Media exists, Cancelled Maintenance, Agency is PW
 params = {
-    "$where": f"analysis_neighborhood = 'South of Market' AND closed_date > '{eighteen_months_ago}' AND media_url IS NOT NULL AND status_notes = 'Cancelled - Planned Maintenance' AND responsible_agency LIKE '%PW%'",
+    "$where": f"closed_date > '{eighteen_months_ago}' AND media_url IS NOT NULL AND status_notes = 'Cancelled - Planned Maintenance' AND responsible_agency LIKE '%PW%'",
     "$order": "closed_date DESC",
     "$limit": st.session_state.limit
 }
@@ -76,8 +74,6 @@ if not df.empty:
     display_count = 0
     
     for index, row in df.iterrows():
-        # Note: We are no longer filtering duplicates via python, relying on API query
-        
         full_url, is_viewable = get_image_info(row.get('media_url'))
         
         # STRICT FILTER: Only show records with viewable images
@@ -96,12 +92,14 @@ if not df.empty:
                     else:
                         date_str = "Open"
                     
+                    # Neighborhood label (useful since we removed the global filter)
+                    neighborhood = row.get('analysis_neighborhood', 'Unknown Neighborhood')
                     address = row.get('address', 'Location N/A')
                     short_address = address.split(',')[0] 
-                    map_url = f"https://www.google.com/maps/search/?api=1&query=?q={address.replace(' ', '+')}"
+                    map_url = f"https://www.google.com/maps/search/?api=1&query={address.replace(' ', '+')}"
                     
-                    st.markdown(f"**Closed: {date_str}**")
-                    st.markdown(f"[{short_address}]({map_url})")
+                    st.markdown(f"**{neighborhood}**")
+                    st.markdown(f"Closed: {date_str} | [{short_address}]({map_url})")
                     st.caption(f"ID: {row.get('service_request_id', 'N/A')}")
             
             display_count += 1
@@ -127,7 +125,7 @@ st.caption("Data source: [DataSF | Open Data Portal](https://data.sfgov.org/City
 with st.expander("Methodology & Notes"):
     st.markdown("""
     **Filters Applied:**
-    * **Neighborhood:** South of Market (SOMA) only.
+    * **Neighborhood:** Citywide (All Neighborhoods).
     * **Status:** Closed within the last 18 months.
     * **Agency:** Public Works (PW).
     * **Resolution:** 'Cancelled - Planned Maintenance'.

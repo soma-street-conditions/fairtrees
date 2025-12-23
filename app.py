@@ -12,6 +12,8 @@ st.markdown("""
         div[data-testid="stVerticalBlock"] > div { gap: 0.2rem; }
         .stMarkdown p { font-size: 0.9rem; margin-bottom: 0px; }
         div.stButton > button { width: 100%; }
+        /* Make links in captions stand out slightly */
+        .stCaption a { text-decoration: underline; color: #1f77b4; }
     </style>
     <meta name="robots" content="noindex, nofollow">
 """, unsafe_allow_html=True)
@@ -25,7 +27,6 @@ st.header("SF Citywide: Planned Maintenance Cancellations")
 st.write("Visualizing 311 reports closed as 'Cancelled - Planned Maintenance' by Public Works.")
 
 # --- SUPERVISOR MAPPING ---
-# Maps District ID -> Display Name
 supervisor_map = {
     "1": "1 - Connie Chan",
     "2": "2 - Stephen Sherrill",
@@ -40,24 +41,16 @@ supervisor_map = {
     "11": "11 - Chyanne Chen"
 }
 
-# Create a reverse map for lookups (Display Name -> District ID)
 reverse_supervisor_map = {v: k for k, v in supervisor_map.items()}
 reverse_supervisor_map["Citywide"] = "Citywide"
 
-# Options for the dropdown
 district_options = ["Citywide"] + list(supervisor_map.values())
 
 # --- FILTER LOGIC ---
-
-# 1. Check URL for existing selection (e.g. ?district=6)
 query_params = st.query_params
 url_district_id = query_params.get("district", "Citywide")
-
-# 2. Determine the Label to show in the dropdown based on the ID in the URL
-#    If ID is "6", we find "6 - Matt Dorsey". Default to "Citywide".
 current_label = supervisor_map.get(url_district_id, "Citywide")
 
-# 3. Create the Dropdown
 col_filter, col_spacer = st.columns([1, 3])
 with col_filter:
     selected_label = st.selectbox(
@@ -66,10 +59,8 @@ with col_filter:
         index=district_options.index(current_label)
     )
 
-# 4. Get the ID for the URL and API (e.g. "6 - Matt Dorsey" -> "6")
 selected_id = reverse_supervisor_map.get(selected_label, "Citywide")
 
-# 5. Update URL
 if selected_id == "Citywide":
     if "district" in st.query_params:
         del st.query_params["district"]
@@ -78,12 +69,10 @@ else:
 
 st.markdown("---")
 
-# 3. Date Setup
+# 3. Date & API Setup
 eighteen_months_ago = (datetime.now() - timedelta(days=548)).strftime('%Y-%m-%dT%H:%M:%S')
 base_url = "https://data.sfgov.org/resource/vw6y-z8j6.json"
 
-# 4. API Query
-# We filter by the ID (e.g., '6'), not the full name string
 where_clause = f"closed_date > '{eighteen_months_ago}' AND media_url IS NOT NULL AND status_notes = 'Cancelled - Planned Maintenance' AND agency_responsible LIKE '%PW%'"
 
 if selected_id != "Citywide":
@@ -95,14 +84,13 @@ params = {
     "$limit": st.session_state.limit
 }
 
-# 5. Fetch Data
+# 4. Fetch Data
 @st.cache_data(ttl=300)
 def get_data(query_params):
     try:
         r = requests.get(base_url, params=query_params)
         if r.status_code == 200:
-            df = pd.DataFrame(r.json())
-            return df
+            return pd.DataFrame(r.json())
         else:
             st.error(f"API Error {r.status_code}: {r.text}")
             return pd.DataFrame()
@@ -112,7 +100,7 @@ def get_data(query_params):
 
 df = get_data(params)
 
-# 6. Helper: Identify Image
+# 5. Helper: Identify Image
 def get_image_info(media_item):
     if not media_item: return None, False
     url = media_item.get('url') if isinstance(media_item, dict) else media_item
@@ -122,7 +110,7 @@ def get_image_info(media_item):
         return url, True
     return url, False
 
-# 7. Display Feed
+# 6. Display Feed
 if not df.empty:
     cols = st.columns(4)
     display_count = 0
@@ -137,27 +125,27 @@ if not df.empty:
                     st.image(full_url, use_container_width=True)
 
                     # --- DATA PROCESSING ---
-                    # 1. Dates
                     try:
                         opened_dt = pd.to_datetime(row.get('requested_datetime'))
                         closed_dt = pd.to_datetime(row.get('closed_date'))
-                        
                         opened_str = opened_dt.strftime('%m/%d/%y')
                         closed_str = closed_dt.strftime('%m/%d/%y')
-                        
-                        # Calculate days open
                         days_open = (closed_dt - opened_dt).days
                     except:
-                        opened_str = "?"
-                        closed_str = "?"
-                        days_open = "?"
+                        opened_str, closed_str, days_open = "?", "?", "?"
 
-                    # 2. Details
-                    # API field is often 'service_details' or 'request_details'
                     details = row.get('service_details', row.get('request_details', 'N/A'))
-                    status_notes = row.get('status_notes', '')
+                    status_notes = row.get('status_notes', 'Closed')
+                    
+                    # LINK GENERATION
+                    ticket_id = row.get('service_request_id')
+                    if ticket_id:
+                        ticket_url = f"https://mobile311.sfgov.org/tickets/{ticket_id}"
+                        # Markdown link: [Text](URL)
+                        notes_display = f"[{status_notes}]({ticket_url})"
+                    else:
+                        notes_display = status_notes
 
-                    # 3. Address
                     address = row.get('address', 'Location N/A')
                     short_address = address.split(',')[0]
                     map_url = f"https://www.google.com/maps/search/?api=1&query={address.replace(' ', '+')}"
@@ -166,9 +154,9 @@ if not df.empty:
                     st.markdown(f"Opened {opened_str}, Closed {closed_str}")
                     st.markdown(f"Open {days_open} days")
                     
-                    # Using caption for dense text blocks to keep it clean
                     st.caption(f"**Request Details:** {details}")
-                    st.caption(f"**Status Notes:** {status_notes}")
+                    # This caption now contains the clickable link
+                    st.caption(f"**Status Notes:** {notes_display}")
                     
                     st.markdown(f"[{short_address}]({map_url})")
             

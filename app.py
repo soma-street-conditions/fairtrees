@@ -15,22 +15,31 @@ SUPERVISOR_MAP = {
     "10": "10 - Shamann Walton", "11": "11 - Chyanne Chen"
 }
 
-# --- 2. ADVANCED STYLING ---
+# --- 2. STYLING ---
 st.markdown("""
     <style>
-        /* Tighter vertical spacing globally */
+        /* Compact Vertical Spacing */
         div[data-testid="stVerticalBlock"] > div { gap: 0rem; }
         
-        /* CARD TEXT: Smaller and tighter */
+        /* Standard Card Metadata Text */
         .card-text {
             font-family: "Source Sans Pro", sans-serif;
-            font-size: 12px;
-            line-height: 1.3;
+            font-size: 13px;
+            line-height: 1.4;
             color: #E0E0E0;
             margin: 0px;
         }
+
+        /* Smaller, muted text specifically for the Notes field */
+        .note-text {
+            font-family: "Source Sans Pro", sans-serif;
+            font-size: 11px; /* Smaller than standard */
+            line-height: 1.2;
+            color: #9E9E9E; /* Muted gray */
+            margin-top: 4px;
+        }
         
-        /* IMAGES: Uniform height */
+        /* Uniform Image Height */
         div[data-testid="stImage"] > img {
             object-fit: cover; 
             height: 180px; 
@@ -38,7 +47,7 @@ st.markdown("""
             border-radius: 4px;
         }
         
-        /* TABLE: Modern Dashboard Style */
+        /* Modern Table Styling */
         .styled-table-container {
             display: flex;
             justify-content: center;
@@ -49,8 +58,8 @@ st.markdown("""
             border-collapse: collapse;
             font-family: "Source Sans Pro", sans-serif;
             font-size: 13px;
-            min-width: 500px;
-            width: 60%;
+            width: 70%;
+            max-width: 800px;
             background-color: #161B22;
             border-radius: 6px;
             overflow: hidden;
@@ -63,31 +72,20 @@ st.markdown("""
             font-weight: 600;
         }
         .styled-table th, .styled-table td {
-            padding: 8px 15px;
+            padding: 10px 15px;
             border-bottom: 1px solid #30363D;
         }
         .styled-table tbody tr:hover {
             background-color: #1F242C;
         }
-        .styled-table tbody tr:last-child td {
-            border-bottom: none;
-        }
         
         /* Link Styling */
         a { color: #58A6FF; text-decoration: none; }
         a:hover { text-decoration: underline; }
-        
-        /* Highlight Text */
-        .highlight-text {
-            font-size: 1.1rem;
-            font-weight: 600;
-            color: #FFFFFF;
-            margin-bottom: 10px;
-        }
     </style>
 """, unsafe_allow_html=True)
 
-# --- 3. LOGIC ---
+# --- 3. HELPER FUNCTIONS ---
 
 @st.cache_data(ttl=600)
 def load_data(district_id):
@@ -118,13 +116,19 @@ def load_data(district_id):
         r = requests.get(API_URL, params=params)
         r.raise_for_status()
         df = pd.DataFrame(r.json())
+        
         if df.empty: return pd.DataFrame()
+        
+        # Ensure critical columns exist
+        if 'media_url' not in df.columns: df['media_url'] = None
+        if 'status_notes' not in df.columns: df['status_notes'] = "No notes"
+        if 'service_details' not in df.columns: df['service_details'] = "Tree Basin"
 
         df['requested_datetime'] = pd.to_datetime(df['requested_datetime'], errors='coerce')
         df['closed_date'] = pd.to_datetime(df['closed_date'], errors='coerce')
         return df
     except Exception as e:
-        st.error(f"Error: {e}")
+        st.error(f"Data Connection Error: {e}")
         return pd.DataFrame()
 
 def get_valid_image_url(media_item):
@@ -169,25 +173,33 @@ def main():
     selected_id = rev_map[selected_label]
     st.query_params["district"] = selected_id
 
-    # Load Full Data
+    # Load Data
     df = load_data(selected_id)
 
     if df.empty:
         st.warning("No records found.")
         return
 
-    # --- PRE-CALCULATE IMAGE DATA ---
-    # We do this early so we can display the count at the top
+    # --- IMAGE PRE-PROCESSING & FILTERING ---
     df['valid_image'] = df['media_url'].apply(get_valid_image_url)
+    
+    # 1. Filter for Valid Images
     display_df = df.dropna(subset=['valid_image'])
-    # Deduplicate based on image URL
+    
+    # 2. FILTER OUT DUPLICATE CASES (Text-based)
+    # We remove any row where status_notes contains the word "duplicate" (case-insensitive)
+    display_df = display_df[~display_df['status_notes'].str.contains("duplicate", case=False, na=False)]
+    
+    # 3. Deduplicate based on Image URL (to prevent same photo showing twice)
     display_df = display_df.drop_duplicates(subset=['valid_image'])
+    
     image_count = len(display_df)
 
-    # --- DISPLAY COUNT TEXT ---
-    st.markdown(f"<p class='highlight-text'>Showing {image_count} cases with images</p>", unsafe_allow_html=True)
+    # --- DISPLAY COUNT ---
+    st.markdown(f"#### 📸 Showing {image_count} cases with images")
 
-    # --- STATS TABLE (Uses Full Dataset) ---
+    # --- STATS TABLE (Uses Full Dataset including Duplicates) ---
+    # We use the original 'df' here so stats are accurate to the total 311 volume
     df['closure_reason'] = df['status_notes'].apply(get_category)
     stats = df['closure_reason'].value_counts().reset_index()
     stats.columns = ['Reason', 'Count']
@@ -210,7 +222,7 @@ def main():
                 <thead>
                     <tr>
                         <th style="width: 40%;">Closure Reason</th>
-                        <th style="width: 30%;">Cases ({total_cases:,})</th>
+                        <th style="width: 30%;">Total Cases ({total_cases:,})</th>
                         <th style="width: 30%;">%</th>
                     </tr>
                 </thead>
@@ -225,7 +237,7 @@ def main():
 
     # --- IMAGE GRID SECTION ---
     if display_df.empty:
-        st.info("No unique images found for these records.")
+        st.info("No unique non-duplicate images found for these records.")
         return
 
     COLS_PER_ROW = 4
@@ -234,29 +246,34 @@ def main():
     for i, (index, row) in enumerate(display_df.iterrows()):
         with cols[i % COLS_PER_ROW]:
             with st.container(border=True):
+                # Image
                 st.image(row['valid_image'], use_container_width=True)
                 
-                # Metadata
+                # Metadata Prep
                 opened = row['requested_datetime']
                 closed = row['closed_date']
+                
                 opened_str = opened.strftime('%m/%d/%y') if pd.notnull(opened) else "?"
                 closed_str = closed.strftime('%m/%d/%y') if pd.notnull(closed) else "?"
                 days_diff = (closed - opened).days if (pd.notnull(opened) and pd.notnull(closed)) else "?"
                 
-                service = str(row.get('service_details', 'N/A')).replace('_', ' ').title()
+                service = str(row.get('service_details', 'Tree Basin')).replace('_', ' ').title()
+                
+                # Full Note Text (No Truncation)
                 notes = str(row.get('status_notes', 'N/A'))
-                if len(notes) > 60: notes = notes[:60] + "..."
                 
                 addr = row.get('address', 'Location N/A').split(',')[0]
                 
                 map_url = f"https://www.google.com/maps/search/?api=1&query={addr.replace(' ', '+')}+San+Francisco"
                 ticket_url = f"https://mobile311.sfgov.org/tickets/{row['service_request_id']}"
 
+                # Render Card Text
+                # Note: The "Closure note" now uses the .note-text class for smaller font
                 st.markdown(f"""
                     <p class="card-text"><b><a href="{map_url}" target="_blank">{addr}</a></b></p>
-                    <p class="card-text" style="color: #8B949E;">{opened_str} ➔ {closed_str} ({days_diff} days)</p>
+                    <p class="card-text" style="color: #9E9E9E;">{opened_str} ➔ {closed_str} ({days_diff} days)</p>
                     <p class="card-text">{service}</p>
-                    <p class="card-text">Note: <a href="{ticket_url}" target="_blank">{notes}</a></p>
+                    <p class="note-text">Note: <a href="{ticket_url}" target="_blank">{notes}</a></p>
                 """, unsafe_allow_html=True)
 
 if __name__ == "__main__":

@@ -3,33 +3,12 @@ import pandas as pd
 import requests
 from datetime import datetime, timedelta
 
-# 1. Page Config
+# --- 1. CONFIGURATION & CONSTANTS ---
 st.set_page_config(page_title="SF Streets: Maintenance", page_icon="🚧", layout="wide")
 
-# --- STYLING ---
-st.markdown("""
-    <style>
-        div[data-testid="stVerticalBlock"] > div { gap: 0.2rem; }
-        .stMarkdown p { font-size: 0.9rem; margin-bottom: 0px; }
-        div.stButton > button { width: 100%; }
-        .stCaption a { text-decoration: underline; color: #1f77b4; }
-        
-        /* Stats Text: Enforce White Color */
-        .metric-container {
-            background-color: transparent;
-            padding: 10px 0px;
-        }
-    </style>
-    <meta name="robots" content="noindex, nofollow">
-""", unsafe_allow_html=True)
+API_URL = "https://data.sfgov.org/resource/vw6y-z8j6.json"
 
-# 2. Header
-st.header("SF Citywide: Planned Maintenance Cancellations")
-st.write("Visualizing 311 reports closed as 'Cancelled - Planned Maintenance' by Public Works.")
-st.caption("Filters: 'backfill_tree_basin' and 'empty_tree_basin' only.")
-
-# --- SUPERVISOR MAPPING ---
-supervisor_map = {
+SUPERVISOR_MAP = {
     "1": "1 - Connie Chan",
     "2": "2 - Stephen Sherrill",
     "3": "3 - Danny Sauter",
@@ -43,179 +22,219 @@ supervisor_map = {
     "11": "11 - Chyanne Chen"
 }
 
-reverse_supervisor_map = {v: k for k, v in supervisor_map.items()}
-reverse_supervisor_map["Citywide"] = "Citywide"
-district_options = ["Citywide"] + list(supervisor_map.values())
+# --- 2. STYLING ---
+st.markdown("""
+    <style>
+        div[data-testid="stVerticalBlock"] > div { gap: 0.2rem; }
+        .metric-container {
+            background-color: #0E1117; /* Dark background to match theme */
+            border: 1px solid #303030;
+            border-radius: 5px;
+            padding: 15px;
+            text-align: center;
+            margin-bottom: 20px;
+        }
+        .metric-text {
+            font-size: 1.1rem;
+            color: #FFFFFF;
+        }
+        /* Make images fill their container nicely */
+        div[data-testid="stImage"] > img {
+            object-fit: cover; 
+            height: 200px; /* Enforce uniform height */
+            width: 100%;
+        }
+    </style>
+""", unsafe_allow_html=True)
 
-# --- FILTER UI ---
-query_params = st.query_params
-url_district_id = query_params.get("district", "Citywide")
-current_label = supervisor_map.get(url_district_id, "Citywide")
+# --- 3. HELPER FUNCTIONS ---
 
-col_filter, col_spacer = st.columns([1, 3])
-with col_filter:
-    selected_label = st.selectbox(
-        "Filter by Supervisor District:", 
-        district_options,
-        index=district_options.index(current_label)
-    )
+def get_supervisor_options():
+    """Returns list for selectbox."""
+    return ["Citywide"] + list(SUPERVISOR_MAP.values())
 
-selected_id = reverse_supervisor_map.get(selected_label, "Citywide")
-
-if selected_id == "Citywide":
-    if "district" in st.query_params:
-        del st.query_params["district"]
-else:
-    st.query_params["district"] = selected_id
-
-st.markdown("---")
-
-# 3. Setup
-eighteen_months_ago = (datetime.now() - timedelta(days=548)).strftime('%Y-%m-%dT%H:%M:%S')
-base_url = "https://data.sfgov.org/resource/vw6y-z8j6.json"
-
-# --- API QUERY ---
-# Logic: Fetch ALL closed cases for 'tree_basin' regardless of status.
-# We use strict equality in the API to ensure we get exactly what we want.
-details_filter = "(service_details = 'backfill_tree_basin' OR service_details = 'empty_tree_basin')"
-
-params = {
-    "$where": f"closed_date > '{eighteen_months_ago}' AND agency_responsible LIKE '%PW%' AND {details_filter}",
-    "$limit": 50000, # Fetch everything
-    "$order": "closed_date DESC"
-}
-
-if selected_id != "Citywide":
-    params["$where"] += f" AND supervisor_district = '{selected_id}'"
+def get_reverse_supervisor_map():
+    """Maps "1 - Name" back to "1"."""
+    rev = {v: k for k, v in SUPERVISOR_MAP.items()}
+    rev["Citywide"] = "Citywide"
+    return rev
 
 @st.cache_data(ttl=300)
-def get_data(query_params):
+def load_data(district_id):
+    """Fetches data from Socrata API."""
+    eighteen_months_ago = (datetime.now() - timedelta(days=548)).strftime('%Y-%m-%dT%H:%M:%S')
+    
+    # We explicitly SELECT only what we need to save bandwidth
+    select_cols = (
+        "service_request_id, requested_datetime, closed_date, "
+        "service_details, status_notes, address, media_url, supervisor_district"
+    )
+
+    # Filter for Backfill or Empty basins
+    details_filter = "(service_details = 'backfill_tree_basin' OR service_details = 'empty_tree_basin')"
+    
+    params = {
+        "$select": select_cols,
+        "$where": f"closed_date > '{eighteen_months_ago}' AND agency_responsible LIKE '%PW%' AND {details_filter}",
+        "$limit": 50000,
+        "$order": "closed_date DESC"
+    }
+
+    # Add district filter if not Citywide
+    if district_id != "Citywide":
+        params["$where"] += f" AND supervisor_district = '{district_id}'"
+
     try:
-        r = requests.get(base_url, params=query_params)
-        if r.status_code == 200:
-            df = pd.DataFrame(r.json())
-            return df
-        else:
-            st.error(f"API Error {r.status_code}: {r.text}")
+        r = requests.get(API_URL, params=params)
+        r.raise_for_status()
+        df = pd.DataFrame(r.json())
+        
+        if df.empty:
             return pd.DataFrame()
+
+        # Pre-process dates here to avoid doing it in the UI loop
+        df['requested_datetime'] = pd.to_datetime(df['requested_datetime'], errors='coerce')
+        df['closed_date'] = pd.to_datetime(df['closed_date'], errors='coerce')
+        return df
+
     except Exception as e:
-        st.error(f"Connection Error: {e}")
+        st.error(f"Data loading error: {e}")
         return pd.DataFrame()
 
-df = get_data(params)
+def get_valid_image_url(media_item):
+    """Extracts and validates image URL."""
+    if not media_item:
+        return None
+    
+    url = media_item.get('url') if isinstance(media_item, dict) else media_item
+    
+    if not url: 
+        return None
+        
+    clean_url = url.split('?')[0].lower()
+    if clean_url.endswith(('.jpg', '.jpeg', '.png', '.gif', '.webp')):
+        return url
+    return None
 
-# --- CALCULATE STATS ---
-total_records = 0
-cancelled_count = 0
-percentage = 0.0
+# --- 4. MAIN APP LOGIC ---
 
-if not df.empty:
+def main():
+    st.header("SF Citywide: Planned Maintenance Cancellations")
+    st.write("Visualizing 311 reports closed as 'Cancelled - Planned Maintenance' by Public Works.")
+    
+    # --- Sidebar / Filter ---
+    # Handle Query Params
+    query_params = st.query_params
+    url_district = query_params.get("district", "Citywide")
+    
+    # If URL param exists but isn't in our map, default to Citywide
+    if url_district not in SUPERVISOR_MAP and url_district != "Citywide":
+        url_district = "Citywide"
+
+    current_label = SUPERVISOR_MAP.get(url_district, "Citywide")
+    rev_map = get_reverse_supervisor_map()
+
+    col_filter, _ = st.columns([1, 3])
+    with col_filter:
+        selected_label = st.selectbox(
+            "Filter by Supervisor District:", 
+            get_supervisor_options(),
+            index=get_supervisor_options().index(current_label)
+        )
+
+    # Update Query Params based on selection
+    selected_id = rev_map[selected_label]
+    if selected_id == "Citywide":
+        if "district" in st.query_params:
+            del st.query_params["district"]
+    else:
+        st.query_params["district"] = selected_id
+
+    st.markdown("---")
+
+    # --- Data Loading ---
+    with st.spinner("Fetching data..."):
+        df = load_data(selected_id)
+
+    # --- Stats Calculation ---
+    if df.empty:
+        st.warning("No records found matching criteria.")
+        return
+
     total_records = len(df)
     
     # Identify Cancellations
-    # We look for "Cancelled - Planned Maintenance" in the status notes
-    if 'status_notes' in df.columns:
-        cancelled_mask = df['status_notes'].astype(str) == 'Cancelled - Planned Maintenance'
-        cancelled_count = len(df[cancelled_mask])
-        
-        # Filter the DataFrame for display (User likely only wants to see the cancelled ones in the grid)
-        # If you want to see ALL rows in the grid, comment out the next line.
-        display_df = df[cancelled_mask].copy() 
-    else:
-        display_df = pd.DataFrame()
-
-    if total_records > 0:
-        percentage = (cancelled_count / total_records) * 100
-else:
-    display_df = pd.DataFrame()
-
-# --- DISPLAY STATS (White Text) ---
-st.markdown(
-    f"""
-    <div class='metric-container'>
-        <span style='font-size: 1.1rem; font-weight: 500; color: #FFFFFF !important;'>
-            Found <b>{total_records:,}</b> records total (backfill/empty basin only).<br>
-            <b>{cancelled_count:,}</b> were "Cancelled - Planned Maintenance" ({percentage:.1f}% of total).
-        </span>
-    </div>
-    """, 
-    unsafe_allow_html=True
-)
-st.markdown("---")
-
-# 4. Helper: Identify Image
-def get_image_info(media_item):
-    if not media_item: return None, False
-    url = media_item.get('url') if isinstance(media_item, dict) else media_item
-    if not url: return None, False
-    clean_url = url.split('?')[0].lower()
-    if clean_url.endswith(('.jpg', '.jpeg', '.png', '.gif', '.webp', '.bmp')):
-        return url, True
-    return url, False
-
-# 5. Display Feed
-if not display_df.empty:
-    cols = st.columns(4)
-    display_count = 0
+    # Ensure status_notes is string to avoid errors
+    df['status_notes'] = df['status_notes'].astype(str)
+    cancelled_mask = df['status_notes'] == 'Cancelled - Planned Maintenance'
     
-    # Identify the details column
-    possible_cols = ['service_details', 'request_details', 'service_subtype']
-    details_col = next((c for c in possible_cols if c in display_df.columns), 'service_details')
+    cancelled_df = df[cancelled_mask].copy()
+    cancelled_count = len(cancelled_df)
+    percentage = (cancelled_count / total_records * 100) if total_records > 0 else 0
 
-    for index, row in display_df.iterrows():
-        full_url, is_viewable = get_image_info(row.get('media_url'))
-        
-        if full_url and is_viewable:
-            col_index = display_count % 4
-            with cols[col_index]:
-                with st.container(border=True):
-                    st.image(full_url, use_container_width=True)
+    # --- Stats Display ---
+    st.markdown(
+        f"""
+        <div class='metric-container'>
+            <span class='metric-text'>
+                Found <b>{total_records:,}</b> records total (backfill/empty basin only).<br>
+                <b>{cancelled_count:,}</b> were "Cancelled - Planned Maintenance" ({percentage:.1f}% of total).
+            </span>
+        </div>
+        """, 
+        unsafe_allow_html=True
+    )
 
-                    # --- DATA PROCESSING ---
-                    try:
-                        opened_dt = pd.to_datetime(row.get('requested_datetime'))
-                        closed_dt = pd.to_datetime(row.get('closed_date'))
-                        opened_str = opened_dt.strftime('%m/%d/%y')
-                        closed_str = closed_dt.strftime('%m/%d/%y')
-                        days_open = (closed_dt - opened_dt).days
-                    except:
-                        opened_str, closed_str, days_open = "?", "?", "?"
+    if cancelled_df.empty:
+        st.info("No cancelled requests found with the current filter.")
+        return
 
-                    details = row.get(details_col, 'N/A')
-                    status_notes = row.get('status_notes', 'Closed')
-                    
-                    # Link Generation
-                    ticket_id = row.get('service_request_id')
-                    if ticket_id:
-                        ticket_url = f"https://mobile311.sfgov.org/tickets/{ticket_id}"
-                        notes_display = f"[{status_notes}]({ticket_url})"
-                    else:
-                        notes_display = status_notes
-
-                    address = row.get('address', 'Location N/A')
-                    short_address = address.split(',')[0]
-                    map_url = f"https://www.google.com/maps/search/?api=1&query={address.replace(' ', '+')}"
-
-                    # --- RENDER TEXT ---
-                    st.markdown(f"[{short_address}]({map_url})")
-                    
-                    st.markdown(f"Opened {opened_str}, Closed {closed_str}")
-                    st.markdown(f"Open {days_open} days")
-                    
-                    st.caption(f"**Request Details:** {details}")
-                    st.caption(f"**Status Notes:** {notes_display}")
-            
-            display_count += 1
-            
-    if display_count == 0:
-        st.info("No viewable images found for the cancelled records.")
+    # --- Image Grid ---
+    st.markdown("---")
     
-else:
-    if selected_id != "Citywide":
-        st.warning(f"No records found for Supervisor District {selected_label} matching these criteria.")
-    else:
-        st.warning("No records found matching criteria.")
+    # Filter for rows that actually have valid images
+    # We apply the helper function to create a new column for easier filtering
+    cancelled_df['valid_image'] = cancelled_df['media_url'].apply(get_valid_image_url)
+    display_df = cancelled_df.dropna(subset=['valid_image'])
 
-# Footer
-st.markdown("---")
-st.caption("Data source: DataSF | Open Data Portal")
+    if display_df.empty:
+        st.info("No images available for these cancelled requests.")
+        return
+
+    # Grid Logic
+    COLS_PER_ROW = 4
+    cols = st.columns(COLS_PER_ROW)
+
+    for i, (index, row) in enumerate(display_df.iterrows()):
+        col = cols[i % COLS_PER_ROW]
+        
+        with col:
+            with st.container(border=True):
+                st.image(row['valid_image'], use_container_width=True)
+                
+                # Calculations
+                opened_str = row['requested_datetime'].strftime('%m/%d/%y') if pd.notnull(row['requested_datetime']) else "?"
+                closed_str = row['closed_date'].strftime('%m/%d/%y') if pd.notnull(row['closed_date']) else "?"
+                
+                days_open = "?"
+                if pd.notnull(row['requested_datetime']) and pd.notnull(row['closed_date']):
+                    days_open = (row['closed_date'] - row['requested_datetime']).days
+
+                # Links
+                ticket_id = row['service_request_id']
+                ticket_url = f"https://mobile311.sfgov.org/tickets/{ticket_id}"
+                
+                addr_clean = row.get('address', 'Location N/A')
+                short_addr = addr_clean.split(',')[0]
+                map_url = f"https://www.google.com/maps/search/?api=1&query={addr_clean.replace(' ', '+')}"
+
+                # Card Content
+                st.markdown(f"**[{short_addr}]({map_url})**")
+                st.caption(f"Opened: {opened_str} | Closed: {closed_str}")
+                st.caption(f"Days Open: {days_open}")
+                
+                # Notes Link
+                st.markdown(f"[View Ticket {ticket_id}]({ticket_url})")
+
+if __name__ == "__main__":
+    main()

@@ -21,9 +21,28 @@ st.markdown("""
     <style>
         div[data-testid="stVerticalBlock"] > div { gap: 0rem; }
         
-        .card-text { font-family: "Source Sans Pro", sans-serif; font-size: 13px; line-height: 1.4; color: #E0E0E0; margin: 0px; }
-        .note-text { font-family: "Source Sans Pro", sans-serif; font-size: 11px; line-height: 1.2; color: #9E9E9E; margin-top: 4px; }
-        div[data-testid="stImage"] > img { object-fit: cover; height: 180px; width: 100%; border-radius: 4px; }
+        .card-text {
+            font-family: "Source Sans Pro", sans-serif;
+            font-size: 13px;
+            line-height: 1.4;
+            color: #E0E0E0;
+            margin: 0px;
+        }
+        .note-text {
+            font-family: "Source Sans Pro", sans-serif;
+            font-size: 11px;
+            line-height: 1.2;
+            color: #9E9E9E;
+            margin-top: 4px;
+        }
+        
+        div[data-testid="stImage"] > img {
+            object-fit: cover; 
+            height: 180px; 
+            width: 100%;
+            border-radius: 4px;
+        }
+        
         a { color: #58A6FF; text-decoration: none; }
         a:hover { text-decoration: underline; }
     </style>
@@ -32,17 +51,29 @@ st.markdown("""
 # --- 3. HELPER FUNCTIONS ---
 
 @st.cache_data(ttl=600)
-def load_data_v12(district_id):
-    # Fetch from Socrata (DataSF) - FAST
+def load_data_v9(district_id):
     eighteen_months_ago = (datetime.now() - timedelta(days=548)).strftime('%Y-%m-%dT%H:%M:%S')
     
-    select_cols = "service_request_id, requested_datetime, closed_date, service_details, status_notes, address, media_url, supervisor_district"
-    where_clause = f"closed_date > '{eighteen_months_ago}' AND agency_responsible LIKE '%PW%' AND (upper(service_details) LIKE '%TREE_BASIN%')"
+    select_cols = (
+        "service_request_id, requested_datetime, closed_date, "
+        "service_details, status_notes, address, media_url, supervisor_district"
+    )
+    
+    where_clause = (
+        f"closed_date > '{eighteen_months_ago}' "
+        "AND agency_responsible LIKE '%PW%' "
+        "AND (upper(service_details) LIKE '%TREE_BASIN%')"
+    )
 
     if district_id != "Citywide":
         where_clause += f" AND supervisor_district = '{district_id}'"
 
-    params = {"$select": select_cols, "$where": where_clause, "$limit": 5000, "$order": "closed_date DESC"}
+    params = {
+        "$select": select_cols,
+        "$where": where_clause,
+        "$limit": 5000,
+        "$order": "closed_date DESC"
+    }
 
     try:
         r = requests.get(API_URL, params=params)
@@ -58,75 +89,91 @@ def load_data_v12(district_id):
         df['status_notes'] = df['status_notes'].astype(str)
         df['requested_datetime'] = pd.to_datetime(df['requested_datetime'], errors='coerce')
         df['closed_date'] = pd.to_datetime(df['closed_date'], errors='coerce')
+        
         return df
     except Exception as e:
         st.error(f"Data Error: {e}")
         return pd.DataFrame()
 
-@st.cache_data(ttl=3600)
-def resolve_batch_images(ticket_ids):
+def get_valid_image_url(media_item):
     """
-    Takes a list of Ticket IDs and resolves their images in ONE API call 
-    using the Open311 'comma-delimited ID' feature.
+    Validates URL. Allows Verint URLs to pass so they can be fixed.
     """
-    if not ticket_ids:
-        return {}
+    if not media_item: return None
+    url = media_item.get('url') if isinstance(media_item, dict) else media_item
+    if not isinstance(url, str): return None
     
-    # Convert list to comma-separated string
-    ids_str = ",".join([str(t) for t in ticket_ids])
+    clean_url = url.split('?')[0].lower()
     
-    params = {
-        "service_request_id": ids_str,
-        "extensions": "true" # Required to get extended_attributes (photos)
-    }
-    
-    image_map = {}
-    
+    if clean_url.endswith(('.jpg', '.jpeg', '.png', '.webp')):
+        return url
+        
+    if "verintcloudservices" in clean_url:
+        return url
+        
+    return None
+
+@st.cache_data(ttl=3600, show_spinner=False)
+def fix_verint_url(ticket_id, original_url):
+    """
+    Resolves broken Verint links by querying Open311.
+    PRIORITIZES:
+    1. The last image in 'extended_attributes' (usually the user photo).
+    2. Any image in 'extended_attributes'.
+    3. The main 'media_url' (if it's not a composite stitch).
+    """
+    # If it's already a good Cloudinary link, just keep it
+    if "verintcloudservices" not in str(original_url):
+        return original_url
+
     try:
-        # One call for up to 50-100 tickets
-        r = requests.get(OPEN311_URL, params=params, timeout=8)
+        params = {"service_request_id": ticket_id, "extensions": "true"}
+        r = requests.get(OPEN311_URL, params=params, timeout=3)
         data = r.json()
         
-        for item in data:
-            tid = item.get('service_request_id')
+        if data and len(data) > 0:
+            item = data[0]
             
-            # --- Image Extraction Logic ---
-            # 1. Extended Attributes (Best Source)
+            # --- STRATEGY A: Check extended attributes for multiple photos ---
             ext_attrs = item.get('extended_attributes', {})
             photos = ext_attrs.get('photos', [])
-            best_url = None
             
             if photos:
-                # Find last non-map photo
+                # 1. Try to find the LAST photo (usually the real one, not the map)
+                # We iterate backwards
                 for p in reversed(photos):
                     p_url = p.get('media_url', '')
+                    # Simple filter: skip if it explicitly says "map" (just in case)
                     if "cloudinary" in p_url and "_map" not in p_url:
-                        best_url = p_url
-                        break
-                if not best_url: best_url = photos[-1].get('media_url')
-            
-            # 2. Fallback to main URL
-            if not best_url:
-                main_url = item.get('media_url')
-                if main_url and "cloudinary" in main_url:
-                    best_url = main_url
-            
-            if best_url:
-                image_map[tid] = best_url
+                        return p_url
                 
+                # 2. If all else fails, just take the last one available
+                return photos[-1].get('media_url')
+
+            # --- STRATEGY B: Fallback to main media_url ---
+            # But be careful of the "composite" images that start with complex transforms
+            primary_url = item.get('media_url')
+            if primary_url and "cloudinary" in primary_url:
+                # If it's one of those weird "c_limit,h_748..." stitched URLs, we might want to avoid it
+                # But if it's the only thing we have, we take it.
+                return primary_url
+                    
     except:
         pass
-        
-    return image_map
+    
+    return original_url
 
 def get_category(note):
     if not isinstance(note, str) or note.lower() == 'nan': return "Unknown"
     clean = note.strip().lower()
+    
     if "duplicate" in clean: return "Duplicate"
     if "insufficient info" in clean: return "Insufficient Info"
     if "transferred" in clean: return "Transferred"
     if "administrative" in clean: return "Administrative Closure"
+    
     if clean.startswith("case "): clean = clean[5:].strip()
+        
     return clean.split(' ')[0].title()
 
 # --- 4. MAIN APP ---
@@ -151,8 +198,8 @@ def main():
     selected_id = rev_map[selected_label]
     st.query_params["district"] = selected_id
 
-    # --- Load Data (Socrata) ---
-    df = load_data_v12(selected_id)
+    # --- Load Data ---
+    df = load_data_v9(selected_id)
 
     if df.empty:
         st.warning(f"No records found for {selected_label}.")
@@ -164,74 +211,80 @@ def main():
     
     if unique_count > 0:
         unique_cases_df['closure_reason'] = unique_cases_df['status_notes'].apply(get_category)
+        
         stats = unique_cases_df['closure_reason'].value_counts().reset_index()
         stats.columns = ['Closure Reason', 'Count']
         stats['Percentage'] = (stats['Count'] / unique_count) * 100
 
         st.markdown(f"##### Closure Reasons ({selected_label})")
         st.caption(f"Denominator: {unique_count:,} unique tickets.")
+        
         st.dataframe(
-            stats, use_container_width=False, width=700, hide_index=True,
+            stats,
+            use_container_width=False,
+            width=700,
+            hide_index=True,
             column_config={
                 "Closure Reason": st.column_config.TextColumn("Reason", width="medium"),
                 "Count": st.column_config.NumberColumn("Cases", format="%d"),
-                "Percentage": st.column_config.ProgressColumn("Share", format="%.1f%%", min_value=0, max_value=100),
+                "Percentage": st.column_config.ProgressColumn(
+                    "Share",
+                    format="%.1f%%",
+                    min_value=0,
+                    max_value=100,
+                ),
             }
         )
-    
+    else:
+        st.info("No stats available.")
+
     st.markdown("---")
 
-    # --- 2. IMAGE GALLERY (BATCH RESOLVED) ---
+    # --- 2. IMAGE GALLERY ---
+    df['valid_image'] = df['media_url'].apply(get_valid_image_url)
+    display_df = df.dropna(subset=['valid_image'])
     
-    # A. Initial Filter (Must have some media URL to start with)
-    display_df = df.dropna(subset=['media_url'])
-    # B. Logic Filters
+    # Filter A: Remove "Duplicate" status
     display_df = display_df[~display_df['status_notes'].str.contains("duplicate", case=False, na=False)]
     
+    # Filter B: Deduplicate images
+    display_df = display_df.drop_duplicates(subset=['valid_image'])
+    
+    image_count = len(display_df)
+
+    st.markdown(f"#### 📸 Showing {image_count} cases with images")
+
     if display_df.empty:
         st.info("No images found.")
         return
 
-    # C. BATCH RESOLUTION STEP
-    # We grab the IDs of the images we want to show.
-    # To keep performance high, we'll process the top 80 images.
-    subset_to_show = display_df.head(80).copy()
-    ids_to_fetch = subset_to_show['service_request_id'].tolist()
-    
-    # *** THIS IS THE NEW PART ***
-    # Fetch valid URLs for these 80 IDs in ONE API call
-    resolved_map = resolve_batch_images(ids_to_fetch)
-    
-    # Map the new URLs back to the dataframe
-    # If an ID isn't in the map (resolution failed), we drop it to avoid showing broken images
-    subset_to_show['clean_image_url'] = subset_to_show['service_request_id'].map(resolved_map)
-    final_render_df = subset_to_show.dropna(subset=['clean_image_url'])
-    
-    # Deduplicate by final image URL
-    final_render_df = final_render_df.drop_duplicates(subset=['clean_image_url'])
-
-    image_count = len(final_render_df)
-    st.markdown(f"#### 📸 Showing {image_count} cases with resolved images")
-
     COLS_PER_ROW = 4
     cols = st.columns(COLS_PER_ROW)
 
-    for i, (index, row) in enumerate(final_render_df.iterrows()):
-        with cols[i % COLS_PER_ROW]:
+    for i, (index, row) in enumerate(display_df.iterrows()):
+        tile = cols[i % COLS_PER_ROW]
+        with tile:
             with st.container(border=True):
-                st.image(row['clean_image_url'], use_container_width=True)
+                # FIX VERINT URL
+                raw_url = row['valid_image']
+                ticket_id = row['service_request_id']
+                final_image_url = fix_verint_url(ticket_id, raw_url)
+                
+                st.image(final_image_url, use_container_width=True)
                 
                 opened = row['requested_datetime']
                 closed = row['closed_date']
+                
                 opened_str = opened.strftime('%m/%d/%y') if pd.notnull(opened) else "?"
                 closed_str = closed.strftime('%m/%d/%y') if pd.notnull(closed) else "?"
                 days_diff = (closed - opened).days if (pd.notnull(opened) and pd.notnull(closed)) else "?"
                 
                 service = str(row['service_details']).replace('_', ' ').title()
                 notes = str(row['status_notes'])
+                
                 addr = str(row['address']).split(',')[0]
                 map_url = f"https://www.google.com/maps/search/?api=1&query={addr.replace(' ', '+')}+San+Francisco"
-                ticket_url = f"https://mobile311.sfgov.org/tickets/{row['service_request_id']}"
+                ticket_url = f"https://mobile311.sfgov.org/tickets/{ticket_id}"
 
                 st.markdown(f"""
                     <p class="card-text"><b><a href="{map_url}" target="_blank">{addr}</a></b></p>

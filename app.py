@@ -7,6 +7,7 @@ from datetime import datetime, timedelta
 st.set_page_config(page_title="SF Tree Basin Maintenance", page_icon="🌳", layout="wide")
 
 API_URL = "https://data.sfgov.org/resource/vw6y-z8j6.json"
+OPEN311_URL = "https://mobile311.sfgov.org/open311/v2/requests.json"
 
 SUPERVISOR_MAP = {
     "1": "1 - Connie Chan", "2": "2 - Stephen Sherrill", "3": "3 - Danny Sauter",
@@ -50,7 +51,7 @@ st.markdown("""
 # --- 3. HELPER FUNCTIONS ---
 
 @st.cache_data(ttl=600)
-def load_data_v7(district_id):
+def load_data_v8(district_id):
     eighteen_months_ago = (datetime.now() - timedelta(days=548)).strftime('%Y-%m-%dT%H:%M:%S')
     
     select_cols = (
@@ -95,13 +96,50 @@ def load_data_v7(district_id):
         return pd.DataFrame()
 
 def get_valid_image_url(media_item):
+    """
+    Validates URL. Now specifically ALLOWS Verint URLs to pass through
+    so they can be fixed later.
+    """
     if not media_item: return None
     url = media_item.get('url') if isinstance(media_item, dict) else media_item
     if not isinstance(url, str): return None
+    
     clean_url = url.split('?')[0].lower()
+    
+    # 1. Standard Image Check
     if clean_url.endswith(('.jpg', '.jpeg', '.png', '.webp')):
         return url
+        
+    # 2. Verint Check (Allow these through!)
+    if "verintcloudservices" in clean_url:
+        return url
+        
     return None
+
+@st.cache_data(ttl=3600, show_spinner=False)
+def fix_verint_url(ticket_id, original_url):
+    """
+    If the URL is a broken Verint link, ask Open311 for the Cloudinary link.
+    """
+    if "verintcloudservices" not in str(original_url):
+        return original_url
+
+    try:
+        # Call Open311 API
+        params = {"service_request_id": ticket_id, "extensions": "true"}
+        r = requests.get(OPEN311_URL, params=params, timeout=3)
+        data = r.json()
+        
+        if data and len(data) > 0:
+            new_url = data[0].get('media_url')
+            # Only swap if we actually got a Cloudinary/valid link back
+            if new_url and "cloudinary" in new_url:
+                return new_url
+    except:
+        # On any error (timeout, connection), fail gracefully back to original
+        pass
+    
+    return original_url
 
 def get_category(note):
     if not isinstance(note, str) or note.lower() == 'nan': return "Unknown"
@@ -139,13 +177,13 @@ def main():
     st.query_params["district"] = selected_id
 
     # --- Load Data ---
-    df = load_data_v7(selected_id)
+    df = load_data_v8(selected_id)
 
     if df.empty:
         st.warning(f"No records found for {selected_label}.")
         return
 
-    # --- 1. STATISTICS (UNIQUE TICKETS ONLY) ---
+    # --- 1. STATISTICS (Unique Tickets Only) ---
     unique_cases_df = df.drop_duplicates(subset=['service_request_id'])
     unique_count = len(unique_cases_df)
     
@@ -156,10 +194,9 @@ def main():
         stats = unique_cases_df['closure_reason'].value_counts().reset_index()
         stats.columns = ['Closure Reason', 'Count']
         
-        # FIX: Multiply by 100 for proper formatting (0.72 -> 72.0)
+        # Multiply by 100 for correct percentage bar formatting
         stats['Percentage'] = (stats['Count'] / unique_count) * 100
 
-        # Display Table
         st.markdown(f"##### Closure Reasons ({selected_label})")
         st.caption(f"Denominator: {unique_count:,} unique tickets found in this district.")
         
@@ -173,9 +210,9 @@ def main():
                 "Count": st.column_config.NumberColumn("Cases", format="%d"),
                 "Percentage": st.column_config.ProgressColumn(
                     "Share",
-                    format="%.1f%%", # Now renders 72.0%
+                    format="%.1f%%",
                     min_value=0,
-                    max_value=100,   # Scale adjusted to 0-100
+                    max_value=100,
                 ),
             }
         )
@@ -184,14 +221,15 @@ def main():
 
     st.markdown("---")
 
-    # --- 2. IMAGE GALLERY (ALL PHOTOS) ---
+    # --- 2. IMAGE GALLERY ---
+    # Prepare potential images
     df['valid_image'] = df['media_url'].apply(get_valid_image_url)
     display_df = df.dropna(subset=['valid_image'])
     
     # Filter A: Remove "Duplicate" status from images
     display_df = display_df[~display_df['status_notes'].str.contains("duplicate", case=False, na=False)]
     
-    # Filter B: Remove duplicate images
+    # Filter B: Remove duplicate images (same photo used twice)
     display_df = display_df.drop_duplicates(subset=['valid_image'])
     
     image_count = len(display_df)
@@ -206,10 +244,19 @@ def main():
     cols = st.columns(COLS_PER_ROW)
 
     for i, (index, row) in enumerate(display_df.iterrows()):
-        with cols[i % COLS_PER_ROW]:
+        tile = cols[i % COLS_PER_ROW]
+        with tile:
             with st.container(border=True):
-                st.image(row['valid_image'], use_container_width=True)
+                # --- THE VERINT FIX ---
+                # Resolve URL if needed before displaying
+                raw_url = row['valid_image']
+                ticket_id = row['service_request_id']
                 
+                final_image_url = fix_verint_url(ticket_id, raw_url)
+                
+                st.image(final_image_url, use_container_width=True)
+                
+                # Metadata
                 opened = row['requested_datetime']
                 closed = row['closed_date']
                 
@@ -222,7 +269,7 @@ def main():
                 
                 addr = str(row['address']).split(',')[0]
                 map_url = f"https://www.google.com/maps/search/?api=1&query={addr.replace(' ', '+')}+San+Francisco"
-                ticket_url = f"https://mobile311.sfgov.org/tickets/{row['service_request_id']}"
+                ticket_url = f"https://mobile311.sfgov.org/tickets/{ticket_id}"
 
                 st.markdown(f"""
                     <p class="card-text"><b><a href="{map_url}" target="_blank">{addr}</a></b></p>

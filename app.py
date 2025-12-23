@@ -24,23 +24,58 @@ if 'limit' not in st.session_state:
 st.header("SF Citywide: Planned Maintenance Cancellations")
 st.write("Visualizing 311 reports closed as 'Cancelled - Planned Maintenance' by Public Works.")
 
-# --- FILTERING ---
-district_options = ["Citywide"] + [str(i) for i in range(1, 12)]
+# --- SUPERVISOR MAPPING ---
+# Maps District ID -> Display Name
+supervisor_map = {
+    "1": "1 - Connie Chan",
+    "2": "2 - Stephen Sherrill",
+    "3": "3 - Danny Sauter",
+    "4": "4 - Alan Wong",
+    "5": "5 - Bilal Mahmood",
+    "6": "6 - Matt Dorsey",
+    "7": "7 - Myrna Melgar",
+    "8": "8 - Rafael Mandelman",
+    "9": "9 - Jackie Fielder",
+    "10": "10 - Shamann Walton",
+    "11": "11 - Chyanne Chen"
+}
+
+# Create a reverse map for lookups (Display Name -> District ID)
+reverse_supervisor_map = {v: k for k, v in supervisor_map.items()}
+reverse_supervisor_map["Citywide"] = "Citywide"
+
+# Options for the dropdown
+district_options = ["Citywide"] + list(supervisor_map.values())
+
+# --- FILTER LOGIC ---
+
+# 1. Check URL for existing selection (e.g. ?district=6)
 query_params = st.query_params
-url_district = query_params.get("district", "Citywide")
+url_district_id = query_params.get("district", "Citywide")
 
-if url_district not in district_options:
-    url_district = "Citywide"
+# 2. Determine the Label to show in the dropdown based on the ID in the URL
+#    If ID is "6", we find "6 - Matt Dorsey". Default to "Citywide".
+current_label = supervisor_map.get(url_district_id, "Citywide")
 
+# 3. Create the Dropdown
 col_filter, col_spacer = st.columns([1, 3])
 with col_filter:
-    selected_district = st.selectbox(
+    selected_label = st.selectbox(
         "Filter by Supervisor District:", 
         district_options,
-        index=district_options.index(url_district)
+        index=district_options.index(current_label)
     )
 
-st.query_params["district"] = selected_district
+# 4. Get the ID for the URL and API (e.g. "6 - Matt Dorsey" -> "6")
+selected_id = reverse_supervisor_map.get(selected_label, "Citywide")
+
+# 5. Update URL
+if selected_id == "Citywide":
+    if "district" in st.query_params:
+        del st.query_params["district"]
+else:
+    st.query_params["district"] = selected_id
+
 st.markdown("---")
 
 # 3. Date Setup
@@ -48,11 +83,11 @@ eighteen_months_ago = (datetime.now() - timedelta(days=548)).strftime('%Y-%m-%dT
 base_url = "https://data.sfgov.org/resource/vw6y-z8j6.json"
 
 # 4. API Query
-# Note: 'service_details' contains the user's description of the issue
+# We filter by the ID (e.g., '6'), not the full name string
 where_clause = f"closed_date > '{eighteen_months_ago}' AND media_url IS NOT NULL AND status_notes = 'Cancelled - Planned Maintenance' AND agency_responsible LIKE '%PW%'"
 
-if selected_district != "Citywide":
-    where_clause += f" AND supervisor_district = '{selected_district}'"
+if selected_id != "Citywide":
+    where_clause += f" AND supervisor_district = '{selected_id}'"
 
 params = {
     "$where": where_clause,
@@ -151,8 +186,8 @@ if not df.empty:
             st.rerun()
 
 else:
-    if selected_district != "Citywide":
-        st.warning(f"No records found for Supervisor District {selected_district} matching these criteria.")
+    if selected_id != "Citywide":
+        st.warning(f"No records found for Supervisor District {selected_label} matching these criteria.")
     else:
         st.warning("No records found matching 'Cancelled - Planned Maintenance' for PW in the last 18 months.")
 

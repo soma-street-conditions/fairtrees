@@ -24,42 +24,33 @@ if 'limit' not in st.session_state:
 st.header("SF Citywide: Planned Maintenance Cancellations")
 st.write("Visualizing 311 reports closed as 'Cancelled - Planned Maintenance' by Public Works.")
 
-# --- DEEP LINKING & FILTERING ---
-
-# 1. Define Options
+# --- FILTERING ---
 district_options = ["Citywide"] + [str(i) for i in range(1, 12)]
-
-# 2. Check URL for existing selection (e.g. ?district=6)
-#    If the URL param is invalid, fallback to "Citywide"
 query_params = st.query_params
 url_district = query_params.get("district", "Citywide")
 
 if url_district not in district_options:
     url_district = "Citywide"
 
-# 3. Create the Dropdown
 col_filter, col_spacer = st.columns([1, 3])
 with col_filter:
-    # Set the 'index' based on the URL parameter
     selected_district = st.selectbox(
         "Filter by Supervisor District:", 
         district_options,
         index=district_options.index(url_district)
     )
 
-# 4. Update the URL immediately when the user changes the selection
 st.query_params["district"] = selected_district
-
 st.markdown("---")
 
 # 3. Date Setup
 eighteen_months_ago = (datetime.now() - timedelta(days=548)).strftime('%Y-%m-%dT%H:%M:%S')
 base_url = "https://data.sfgov.org/resource/vw6y-z8j6.json"
 
-# 4. API Query Construction
+# 4. API Query
+# Note: 'service_details' contains the user's description of the issue
 where_clause = f"closed_date > '{eighteen_months_ago}' AND media_url IS NOT NULL AND status_notes = 'Cancelled - Planned Maintenance' AND agency_responsible LIKE '%PW%'"
 
-# Append District filter if not Citywide
 if selected_district != "Citywide":
     where_clause += f" AND supervisor_district = '{selected_district}'"
 
@@ -84,7 +75,6 @@ def get_data(query_params):
         st.error(f"Connection Error: {e}")
         return pd.DataFrame()
 
-# Pass params so cache invalidates when filter changes
 df = get_data(params)
 
 # 6. Helper: Identify Image
@@ -111,21 +101,41 @@ if not df.empty:
                 with st.container(border=True):
                     st.image(full_url, use_container_width=True)
 
-                    # Metadata
-                    if 'closed_date' in row:
-                        date_str = pd.to_datetime(row['closed_date']).strftime('%b %d, %Y')
-                    else:
-                        date_str = "Open"
-                    
-                    neighborhood = row.get('analysis_neighborhood', 'Unknown Neighborhood')
+                    # --- DATA PROCESSING ---
+                    # 1. Dates
+                    try:
+                        opened_dt = pd.to_datetime(row.get('requested_datetime'))
+                        closed_dt = pd.to_datetime(row.get('closed_date'))
+                        
+                        opened_str = opened_dt.strftime('%m/%d/%y')
+                        closed_str = closed_dt.strftime('%m/%d/%y')
+                        
+                        # Calculate days open
+                        days_open = (closed_dt - opened_dt).days
+                    except:
+                        opened_str = "?"
+                        closed_str = "?"
+                        days_open = "?"
+
+                    # 2. Details
+                    # API field is often 'service_details' or 'request_details'
+                    details = row.get('service_details', row.get('request_details', 'N/A'))
+                    status_notes = row.get('status_notes', '')
+
+                    # 3. Address
                     address = row.get('address', 'Location N/A')
-                    short_address = address.split(',')[0] 
+                    short_address = address.split(',')[0]
                     map_url = f"https://www.google.com/maps/search/?api=1&query={address.replace(' ', '+')}"
+
+                    # --- RENDER TEXT ---
+                    st.markdown(f"Opened {opened_str}, Closed {closed_str}")
+                    st.markdown(f"Open {days_open} days")
                     
-                    st.markdown(f"**{neighborhood}**")
-                    st.markdown(f"Closed: {date_str}")
+                    # Using caption for dense text blocks to keep it clean
+                    st.caption(f"**Request Details:** {details}")
+                    st.caption(f"**Status Notes:** {status_notes}")
+                    
                     st.markdown(f"[{short_address}]({map_url})")
-                    st.caption(f"ID: {row.get('service_request_id', 'N/A')}")
             
             display_count += 1
             

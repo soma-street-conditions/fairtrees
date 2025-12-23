@@ -72,12 +72,17 @@ st.markdown("---")
 eighteen_months_ago = (datetime.now() - timedelta(days=548)).strftime('%Y-%m-%dT%H:%M:%S')
 base_url = "https://data.sfgov.org/resource/vw6y-z8j6.json"
 
-# --- BASE FILTER (Applies to Metrics & Feed) ---
-# 1. Date > 18 months
-# 2. Has Image
-# 3. Agency is PW
-# 4. EXCLUDE specific service_details categories
-excluded_details = "('blocking_sidewalk', 'blocking_street_lights', 'damaged_vandalism', 'other')"
+# --- BASE FILTER (Applies to BOTH Metrics and Feed) ---
+# This ensures the denominator only includes relevant ticket types
+excluded_details = """(
+    'blocking_sidewalk', 
+    'blocking_street_lights', 
+    'damaged_vandalism', 
+    'other', 
+    'blocking_signs', 
+    'property_damage', 
+    'hitting_window_or_building'
+)"""
 
 base_where = (
     f"closed_date > '{eighteen_months_ago}' "
@@ -115,6 +120,8 @@ percentage = 0.0
 
 if not metrics_df.empty:
     metrics_df['count'] = pd.to_numeric(metrics_df['count'])
+    
+    # Total is sum of ALL tickets that met the base criteria (including exclusions)
     total_records = metrics_df['count'].sum()
     
     target_row = metrics_df[metrics_df['status_notes'] == 'Cancelled - Planned Maintenance']
@@ -127,7 +134,7 @@ if not metrics_df.empty:
 st.markdown(
     f"""
     <div class='metric-text'>
-        Found <b>{total_records:,}</b> records total (all closure reasons).<br>
+        Found <b>{total_records:,}</b> records total (within these categories).<br>
         <b>{cancelled_count:,}</b> were "Cancelled - Planned Maintenance" ({percentage:.1f}% of total).
     </div>
     """, 
@@ -209,15 +216,15 @@ if not df.empty:
                     short_address = address.split(',')[0]
                     map_url = f"https://www.google.com/maps/search/?api=1&query={address.replace(' ', '+')}"
 
-                    # --- RENDER TEXT ---
+                    # --- RENDER TEXT (Address First) ---
+                    st.markdown(f"[{short_address}]({map_url})")
+                    
                     st.markdown(f"Opened {opened_str}, Closed {closed_str}")
                     st.markdown(f"Open {days_open} days")
                     
                     st.caption(f"**Request Details:** {details}")
                     st.caption(f"**Status Notes:** {notes_display}")
                     
-                    st.markdown(f"[{short_address}]({map_url})")
-            
             display_count += 1
             
     if display_count == 0:

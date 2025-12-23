@@ -15,13 +15,13 @@ SUPERVISOR_MAP = {
     "10": "10 - Shamann Walton", "11": "11 - Chyanne Chen"
 }
 
-# --- 2. STYLING ---
+# --- 2. STYLING (For the Image Cards) ---
 st.markdown("""
     <style>
-        /* Compact Vertical Spacing */
+        /* Remove gap between standard elements */
         div[data-testid="stVerticalBlock"] > div { gap: 0rem; }
         
-        /* Standard Card Metadata Text */
+        /* Card Text - Clean and Small */
         .card-text {
             font-family: "Source Sans Pro", sans-serif;
             font-size: 13px;
@@ -29,17 +29,15 @@ st.markdown("""
             color: #E0E0E0;
             margin: 0px;
         }
-
-        /* Smaller, muted text specifically for the Notes field */
         .note-text {
             font-family: "Source Sans Pro", sans-serif;
-            font-size: 11px; /* Smaller than standard */
+            font-size: 11px;
             line-height: 1.2;
-            color: #9E9E9E; /* Muted gray */
+            color: #9E9E9E;
             margin-top: 4px;
         }
         
-        /* Uniform Image Height */
+        /* Image Uniformity */
         div[data-testid="stImage"] > img {
             object-fit: cover; 
             height: 180px; 
@@ -47,39 +45,7 @@ st.markdown("""
             border-radius: 4px;
         }
         
-        /* Modern Table Styling */
-        .styled-table-container {
-            display: flex;
-            justify-content: center;
-            margin-top: 10px;
-            margin-bottom: 25px;
-        }
-        .styled-table {
-            border-collapse: collapse;
-            font-family: "Source Sans Pro", sans-serif;
-            font-size: 13px;
-            width: 70%;
-            max-width: 800px;
-            background-color: #161B22;
-            border-radius: 6px;
-            overflow: hidden;
-            border: 1px solid #30363D;
-        }
-        .styled-table thead tr {
-            background-color: #21262D;
-            color: #8B949E;
-            text-align: left;
-            font-weight: 600;
-        }
-        .styled-table th, .styled-table td {
-            padding: 10px 15px;
-            border-bottom: 1px solid #30363D;
-        }
-        .styled-table tbody tr:hover {
-            background-color: #1F242C;
-        }
-        
-        /* Link Styling */
+        /* Links */
         a { color: #58A6FF; text-decoration: none; }
         a:hover { text-decoration: underline; }
     </style>
@@ -88,7 +54,7 @@ st.markdown("""
 # --- 3. HELPER FUNCTIONS ---
 
 @st.cache_data(ttl=600)
-def load_data(district_id):
+def load_data_v4(district_id):
     eighteen_months_ago = (datetime.now() - timedelta(days=548)).strftime('%Y-%m-%dT%H:%M:%S')
     
     select_cols = (
@@ -119,16 +85,18 @@ def load_data(district_id):
         
         if df.empty: return pd.DataFrame()
         
-        # Ensure critical columns exist
-        if 'media_url' not in df.columns: df['media_url'] = None
-        if 'status_notes' not in df.columns: df['status_notes'] = "No notes"
-        if 'service_details' not in df.columns: df['service_details'] = "Tree Basin"
+        # --- Defensive Column Creation ---
+        cols_to_check = ['status_notes', 'media_url', 'service_details', 'address']
+        for c in cols_to_check:
+            if c not in df.columns: df[c] = None
 
+        df['status_notes'] = df['status_notes'].astype(str)
         df['requested_datetime'] = pd.to_datetime(df['requested_datetime'], errors='coerce')
         df['closed_date'] = pd.to_datetime(df['closed_date'], errors='coerce')
+        
         return df
     except Exception as e:
-        st.error(f"Data Connection Error: {e}")
+        st.error(f"Data Error: {e}")
         return pd.DataFrame()
 
 def get_valid_image_url(media_item):
@@ -141,22 +109,36 @@ def get_valid_image_url(media_item):
     return None
 
 def get_category(note):
-    if not isinstance(note, str): return "Unknown"
-    note_lower = note.strip().lower()
+    """
+    Intelligent categorization:
+    1. Lowercase and strip text.
+    2. Handle specific 311 phrases (Duplicate, Transferred).
+    3. Remove 'Case ' prefix to merge 'Case Resolved' with 'Resolved'.
+    4. Return the first word.
+    """
+    if not isinstance(note, str) or note.lower() == 'nan' or note == 'None': 
+        return "Unknown"
     
-    if note_lower.startswith("case is a duplicate"): return "Duplicate"
-    if note_lower.startswith("case resolved"): return "Resolved"
-    if note_lower.startswith("case transferred"): return "Transferred"
-    if note_lower.startswith("insufficient info"): return "Insufficient Info"
+    clean = note.strip().lower()
     
-    return note.split(' ')[0].title()
+    # Specific overrides based on your feedback
+    if "duplicate" in clean: return "Duplicate"
+    if "insufficient info" in clean: return "Insufficient Info"
+    if "transferred" in clean: return "Transferred"
+    
+    # Strip "case " prefix if present (e.g. "case resolved" -> "resolved")
+    if clean.startswith("case "):
+        clean = clean[5:].strip()
+        
+    # Return first word (Title Case)
+    return clean.split(' ')[0].title()
 
 # --- 4. MAIN APP ---
 
 def main():
     st.header("SF Tree Basin Maintenance Tracker")
     
-    # Filter Setup
+    # --- Filter ---
     query_params = st.query_params
     url_district = query_params.get("district", "Citywide")
     district_list = ["Citywide"] + list(SUPERVISOR_MAP.values())
@@ -173,71 +155,61 @@ def main():
     selected_id = rev_map[selected_label]
     st.query_params["district"] = selected_id
 
-    # Load Data
-    df = load_data(selected_id)
+    # --- Load Data ---
+    df = load_data_v4(selected_id)
 
     if df.empty:
         st.warning("No records found.")
         return
 
-    # --- IMAGE PRE-PROCESSING & FILTERING ---
-    df['valid_image'] = df['media_url'].apply(get_valid_image_url)
+    # --- 1. STATS TABLE (Modern & Native) ---
+    # Apply category logic
+    df['closure_reason'] = df['status_notes'].apply(get_category)
     
-    # 1. Filter for Valid Images
+    # Create Summary Dataframe
+    stats = df['closure_reason'].value_counts().reset_index()
+    stats.columns = ['Closure Reason', 'Count']
+    stats['Percentage'] = stats['Count'] / len(df) # Keep as float for progress bar
+    
+    # Display using Native Dataframe with Visuals
+    st.markdown("##### Closure Reasons Summary")
+    st.dataframe(
+        stats,
+        use_container_width=False, # Keeps it compact, not full width
+        width=700, # Fixed readable width
+        hide_index=True,
+        column_config={
+            "Closure Reason": st.column_config.TextColumn("Reason", width="medium"),
+            "Count": st.column_config.NumberColumn("Cases", format="%d"),
+            "Percentage": st.column_config.ProgressColumn(
+                "Share of Total",
+                format="%.1f%%",
+                min_value=0,
+                max_value=1,
+            ),
+        }
+    )
+    
+    st.markdown("---")
+
+    # --- 2. IMAGE FEED LOGIC ---
+    df['valid_image'] = df['media_url'].apply(get_valid_image_url)
     display_df = df.dropna(subset=['valid_image'])
     
-    # 2. FILTER OUT DUPLICATE CASES (Text-based)
-    # We remove any row where status_notes contains the word "duplicate" (case-insensitive)
+    # Filter A: Remove "Duplicate" status from images
     display_df = display_df[~display_df['status_notes'].str.contains("duplicate", case=False, na=False)]
     
-    # 3. Deduplicate based on Image URL (to prevent same photo showing twice)
+    # Filter B: Remove duplicate images (same photo used twice)
     display_df = display_df.drop_duplicates(subset=['valid_image'])
     
     image_count = len(display_df)
 
-    # --- DISPLAY COUNT ---
+    # Display Count Header
     st.markdown(f"#### 📸 Showing {image_count} cases with images")
 
-    # --- STATS TABLE (Uses Full Dataset including Duplicates) ---
-    # We use the original 'df' here so stats are accurate to the total 311 volume
-    df['closure_reason'] = df['status_notes'].apply(get_category)
-    stats = df['closure_reason'].value_counts().reset_index()
-    stats.columns = ['Reason', 'Count']
-    total_cases = len(df)
-    
-    table_rows = ""
-    for _, row in stats.iterrows():
-        pct = (row['Count'] / total_cases) * 100
-        table_rows += f"""
-            <tr>
-                <td>{row['Reason']}</td>
-                <td>{row['Count']:,}</td>
-                <td>{pct:.1f}%</td>
-            </tr>
-        """
-
-    st.markdown(f"""
-        <div class="styled-table-container">
-            <table class="styled-table">
-                <thead>
-                    <tr>
-                        <th style="width: 40%;">Closure Reason</th>
-                        <th style="width: 30%;">Total Cases ({total_cases:,})</th>
-                        <th style="width: 30%;">%</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {table_rows}
-                </tbody>
-            </table>
-        </div>
-    """, unsafe_allow_html=True)
-    
-    st.markdown("---")
-
-    # --- IMAGE GRID SECTION ---
+    # --- 3. IMAGE GRID RENDER ---
     if display_df.empty:
-        st.info("No unique non-duplicate images found for these records.")
+        st.info("No unique images found (duplicates hidden).")
         return
 
     COLS_PER_ROW = 4
@@ -249,7 +221,7 @@ def main():
                 # Image
                 st.image(row['valid_image'], use_container_width=True)
                 
-                # Metadata Prep
+                # Metadata
                 opened = row['requested_datetime']
                 closed = row['closed_date']
                 
@@ -257,18 +229,13 @@ def main():
                 closed_str = closed.strftime('%m/%d/%y') if pd.notnull(closed) else "?"
                 days_diff = (closed - opened).days if (pd.notnull(opened) and pd.notnull(closed)) else "?"
                 
-                service = str(row.get('service_details', 'Tree Basin')).replace('_', ' ').title()
+                service = str(row['service_details']).replace('_', ' ').title()
+                notes = str(row['status_notes'])
                 
-                # Full Note Text (No Truncation)
-                notes = str(row.get('status_notes', 'N/A'))
-                
-                addr = row.get('address', 'Location N/A').split(',')[0]
-                
+                addr = str(row['address']).split(',')[0]
                 map_url = f"https://www.google.com/maps/search/?api=1&query={addr.replace(' ', '+')}+San+Francisco"
                 ticket_url = f"https://mobile311.sfgov.org/tickets/{row['service_request_id']}"
 
-                # Render Card Text
-                # Note: The "Closure note" now uses the .note-text class for smaller font
                 st.markdown(f"""
                     <p class="card-text"><b><a href="{map_url}" target="_blank">{addr}</a></b></p>
                     <p class="card-text" style="color: #9E9E9E;">{opened_str} ➔ {closed_str} ({days_diff} days)</p>

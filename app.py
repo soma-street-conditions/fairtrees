@@ -14,6 +14,8 @@ st.markdown("""
         div.stButton > button { width: 100%; }
         /* Make links in captions stand out slightly */
         .stCaption a { text-decoration: underline; color: #1f77b4; }
+        /* Style for the metrics text */
+        .metric-text { font-size: 1.1rem; font-weight: 500; color: #333; padding: 10px 0px; }
     </style>
     <meta name="robots" content="noindex, nofollow">
 """, unsafe_allow_html=True)
@@ -61,6 +63,7 @@ with col_filter:
 
 selected_id = reverse_supervisor_map.get(selected_label, "Citywide")
 
+# Update URL
 if selected_id == "Citywide":
     if "district" in st.query_params:
         del st.query_params["district"]
@@ -69,22 +72,82 @@ else:
 
 st.markdown("---")
 
-# 3. Date & API Setup
+# 3. Date & Base API Setup
 eighteen_months_ago = (datetime.now() - timedelta(days=548)).strftime('%Y-%m-%dT%H:%M:%S')
 base_url = "https://data.sfgov.org/resource/vw6y-z8j6.json"
 
-where_clause = f"closed_date > '{eighteen_months_ago}' AND media_url IS NOT NULL AND status_notes = 'Cancelled - Planned Maintenance' AND agency_responsible LIKE '%PW%'"
+# Base Where Clause (Applies to BOTH Metrics and Feed)
+# Note: We do NOT filter by 'status_notes' here yet, because we need the total universe for stats
+base_where = f"closed_date > '{eighteen_months_ago}' AND media_url IS NOT NULL AND agency_responsible LIKE '%PW%'"
 
 if selected_id != "Citywide":
-    where_clause += f" AND supervisor_district = '{selected_id}'"
+    base_where += f" AND supervisor_district = '{selected_id}'"
+
+# 4. Fetch Metrics (The Counts)
+@st.cache_data(ttl=300)
+def get_metrics(where_clause):
+    # We query for counts grouped by status note to get the breakdown
+    # $select=status_notes, count(*)
+    # $group=status_notes
+    params = {
+        "$select": "status_notes, count(*)",
+        "$where": where_clause,
+        "$group": "status_notes"
+    }
+    try:
+        r = requests.get(base_url, params=params)
+        if r.status_code == 200:
+            return pd.DataFrame(r.json())
+        else:
+            return pd.DataFrame()
+    except:
+        return pd.DataFrame()
+
+metrics_df = get_metrics(base_where)
+
+# Calculate Stats
+total_records = 0
+cancelled_count = 0
+percentage = 0.0
+
+if not metrics_df.empty:
+    # Convert count to numeric
+    metrics_df['count'] = pd.to_numeric(metrics_df['count'])
+    
+    # 1. Total records (Sum of all closure reasons)
+    total_records = metrics_df['count'].sum()
+    
+    # 2. Target records (Only "Cancelled - Planned Maintenance")
+    target_row = metrics_df[metrics_df['status_notes'] == 'Cancelled - Planned Maintenance']
+    if not target_row.empty:
+        cancelled_count = target_row['count'].iloc[0]
+    
+    # 3. Percentage
+    if total_records > 0:
+        percentage = (cancelled_count / total_records) * 100
+
+# DISPLAY METRICS
+st.markdown(
+    f"""
+    <div class='metric-text'>
+        Found <b>{total_records:,}</b> records total (all closure reasons).<br>
+        <b>{cancelled_count:,}</b> were "Cancelled - Planned Maintenance" ({percentage:.1f}% of total).
+    </div>
+    """, 
+    unsafe_allow_html=True
+)
+st.markdown("---")
+
+# 5. Fetch Data (The Feed)
+# Now we apply the specific status filter for the grid display
+feed_where = base_where + " AND status_notes = 'Cancelled - Planned Maintenance'"
 
 params = {
-    "$where": where_clause,
+    "$where": feed_where,
     "$order": "closed_date DESC",
     "$limit": st.session_state.limit
 }
 
-# 4. Fetch Data
 @st.cache_data(ttl=300)
 def get_data(query_params):
     try:
@@ -100,7 +163,7 @@ def get_data(query_params):
 
 df = get_data(params)
 
-# 5. Helper: Identify Image
+# 6. Helper: Identify Image
 def get_image_info(media_item):
     if not media_item: return None, False
     url = media_item.get('url') if isinstance(media_item, dict) else media_item
@@ -110,7 +173,7 @@ def get_image_info(media_item):
         return url, True
     return url, False
 
-# 6. Display Feed
+# 7. Display Feed
 if not df.empty:
     cols = st.columns(4)
     display_count = 0
@@ -141,7 +204,6 @@ if not df.empty:
                     ticket_id = row.get('service_request_id')
                     if ticket_id:
                         ticket_url = f"https://mobile311.sfgov.org/tickets/{ticket_id}"
-                        # Markdown link: [Text](URL)
                         notes_display = f"[{status_notes}]({ticket_url})"
                     else:
                         notes_display = status_notes
@@ -155,7 +217,6 @@ if not df.empty:
                     st.markdown(f"Open {days_open} days")
                     
                     st.caption(f"**Request Details:** {details}")
-                    # This caption now contains the clickable link
                     st.caption(f"**Status Notes:** {notes_display}")
                     
                     st.markdown(f"[{short_address}]({map_url})")

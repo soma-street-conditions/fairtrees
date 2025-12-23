@@ -27,7 +27,7 @@ st.markdown("""
     <style>
         div[data-testid="stVerticalBlock"] > div { gap: 0.2rem; }
         .metric-container {
-            background-color: #0E1117; /* Dark background to match theme */
+            background-color: #0E1117; /* Dark theme background */
             border: 1px solid #303030;
             border-radius: 5px;
             padding: 15px;
@@ -37,6 +37,7 @@ st.markdown("""
         .metric-text {
             font-size: 1.1rem;
             color: #FFFFFF;
+            line-height: 1.6;
         }
         /* Make images fill their container nicely */
         div[data-testid="stImage"] > img {
@@ -50,27 +51,25 @@ st.markdown("""
 # --- 3. HELPER FUNCTIONS ---
 
 def get_supervisor_options():
-    """Returns list for selectbox."""
     return ["Citywide"] + list(SUPERVISOR_MAP.values())
 
 def get_reverse_supervisor_map():
-    """Maps "1 - Name" back to "1"."""
     rev = {v: k for k, v in SUPERVISOR_MAP.items()}
     rev["Citywide"] = "Citywide"
     return rev
 
 @st.cache_data(ttl=300)
 def load_data(district_id):
-    """Fetches data from Socrata API."""
+    # Logic: 18 months rolling window
     eighteen_months_ago = (datetime.now() - timedelta(days=548)).strftime('%Y-%m-%dT%H:%M:%S')
     
-    # We explicitly SELECT only what we need to save bandwidth
+    # [cite_start]Select only columns defined in the schema [cite: 60]
     select_cols = (
         "service_request_id, requested_datetime, closed_date, "
         "service_details, status_notes, address, media_url, supervisor_district"
     )
 
-    # Filter for Backfill or Empty basins
+    # [cite_start]Filtering for specific tree basin tasks [cite: 60]
     details_filter = "(service_details = 'backfill_tree_basin' OR service_details = 'empty_tree_basin')"
     
     params = {
@@ -80,8 +79,8 @@ def load_data(district_id):
         "$order": "closed_date DESC"
     }
 
-    # Add district filter if not Citywide
     if district_id != "Citywide":
+        # Schema lists supervisor_district as Number, but quotes often safe in SoQL
         params["$where"] += f" AND supervisor_district = '{district_id}'"
 
     try:
@@ -92,7 +91,7 @@ def load_data(district_id):
         if df.empty:
             return pd.DataFrame()
 
-        # Pre-process dates here to avoid doing it in the UI loop
+        # Vectorized Date Conversion
         df['requested_datetime'] = pd.to_datetime(df['requested_datetime'], errors='coerce')
         df['closed_date'] = pd.to_datetime(df['closed_date'], errors='coerce')
         return df
@@ -102,32 +101,30 @@ def load_data(district_id):
         return pd.DataFrame()
 
 def get_valid_image_url(media_item):
-    """Extracts and validates image URL."""
-    if not media_item:
-        return None
+    [cite_start]"""Parses media_url column [cite: 60] to find valid images."""
+    if not media_item: return None
     
+    # Handle case where API returns a dictionary wrapper vs raw string
     url = media_item.get('url') if isinstance(media_item, dict) else media_item
     
-    if not url: 
-        return None
+    if not url: return None
         
     clean_url = url.split('?')[0].lower()
     if clean_url.endswith(('.jpg', '.jpeg', '.png', '.gif', '.webp')):
         return url
     return None
 
-# --- 4. MAIN APP LOGIC ---
+# --- 4. MAIN APP ---
 
 def main():
     st.header("SF Citywide: Planned Maintenance Cancellations")
     st.write("Visualizing 311 reports closed as 'Cancelled - Planned Maintenance' by Public Works.")
     
-    # --- Sidebar / Filter ---
-    # Handle Query Params
+    # --- Sidebar / URL Params ---
     query_params = st.query_params
     url_district = query_params.get("district", "Citywide")
     
-    # If URL param exists but isn't in our map, default to Citywide
+    # Validate URL param
     if url_district not in SUPERVISOR_MAP and url_district != "Citywide":
         url_district = "Citywide"
 
@@ -142,7 +139,7 @@ def main():
             index=get_supervisor_options().index(current_label)
         )
 
-    # Update Query Params based on selection
+    # Sync Selection with URL
     selected_id = rev_map[selected_label]
     if selected_id == "Citywide":
         if "district" in st.query_params:
@@ -161,16 +158,23 @@ def main():
         st.warning("No records found matching criteria.")
         return
 
+    # 1. Total Denominator (All backfill/empty tree basins in range)
     total_records = len(df)
     
-    # Identify Cancellations
-    # Ensure status_notes is string to avoid errors
+    # 2. Numerator (Cancelled only)
+    # Ensure status_notes is string before comparison
     df['status_notes'] = df['status_notes'].astype(str)
     cancelled_mask = df['status_notes'] == 'Cancelled - Planned Maintenance'
-    
     cancelled_df = df[cancelled_mask].copy()
     cancelled_count = len(cancelled_df)
+    
     percentage = (cancelled_count / total_records * 100) if total_records > 0 else 0
+
+    # 3. Visual Feed Count (Cancelled + Has Image)
+    # We apply the image validator now to get the count for the third stat line
+    cancelled_df['valid_image'] = cancelled_df['media_url'].apply(get_valid_image_url)
+    display_df = cancelled_df.dropna(subset=['valid_image'])
+    display_count = len(display_df)
 
     # --- Stats Display ---
     st.markdown(
@@ -178,30 +182,21 @@ def main():
         <div class='metric-container'>
             <span class='metric-text'>
                 Found <b>{total_records:,}</b> records total (backfill/empty basin only).<br>
-                <b>{cancelled_count:,}</b> were "Cancelled - Planned Maintenance" ({percentage:.1f}% of total).
+                <b>{cancelled_count:,}</b> were "Cancelled - Planned Maintenance" ({percentage:.1f}% of total).<br>
+                <span style="font-size: 0.95rem; opacity: 0.8;">Showing <b>{display_count:,}</b> records that have photos.</span>
             </span>
         </div>
         """, 
         unsafe_allow_html=True
     )
 
-    if cancelled_df.empty:
-        st.info("No cancelled requests found with the current filter.")
+    if display_df.empty:
+        st.info("No images available for these cancelled requests.")
         return
 
     # --- Image Grid ---
     st.markdown("---")
     
-    # Filter for rows that actually have valid images
-    # We apply the helper function to create a new column for easier filtering
-    cancelled_df['valid_image'] = cancelled_df['media_url'].apply(get_valid_image_url)
-    display_df = cancelled_df.dropna(subset=['valid_image'])
-
-    if display_df.empty:
-        st.info("No images available for these cancelled requests.")
-        return
-
-    # Grid Logic
     COLS_PER_ROW = 4
     cols = st.columns(COLS_PER_ROW)
 
@@ -210,9 +205,10 @@ def main():
         
         with col:
             with st.container(border=True):
+                # Display the image
                 st.image(row['valid_image'], use_container_width=True)
                 
-                # Calculations
+                # --- Card Details ---
                 opened_str = row['requested_datetime'].strftime('%m/%d/%y') if pd.notnull(row['requested_datetime']) else "?"
                 closed_str = row['closed_date'].strftime('%m/%d/%y') if pd.notnull(row['closed_date']) else "?"
                 
@@ -220,7 +216,6 @@ def main():
                 if pd.notnull(row['requested_datetime']) and pd.notnull(row['closed_date']):
                     days_open = (row['closed_date'] - row['requested_datetime']).days
 
-                # Links
                 ticket_id = row['service_request_id']
                 ticket_url = f"https://mobile311.sfgov.org/tickets/{ticket_id}"
                 
@@ -228,12 +223,12 @@ def main():
                 short_addr = addr_clean.split(',')[0]
                 map_url = f"https://www.google.com/maps/search/?api=1&query={addr_clean.replace(' ', '+')}"
 
-                # Card Content
+                # Text Content
                 st.markdown(f"**[{short_addr}]({map_url})**")
                 st.caption(f"Opened: {opened_str} | Closed: {closed_str}")
                 st.caption(f"Days Open: {days_open}")
                 
-                # Notes Link
+                # Link to Ticket
                 st.markdown(f"[View Ticket {ticket_id}]({ticket_url})")
 
 if __name__ == "__main__":

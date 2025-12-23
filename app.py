@@ -4,7 +4,7 @@ import requests
 from datetime import datetime, timedelta
 
 # --- 1. CONFIGURATION & CONSTANTS ---
-st.set_page_config(page_title="SF Tree Basin: Planned Maintenance", page_icon="🌳", layout="wide")
+st.set_page_config(page_title="SF Tree Basin Maintenance", page_icon="🌳", layout="wide")
 
 API_URL = "https://data.sfgov.org/resource/vw6y-z8j6.json"
 
@@ -38,6 +38,7 @@ st.markdown("""
             font-size: 1.1rem;
             color: #FFFFFF;
         }
+        /* Enforce uniform image heights for a clean grid */
         div[data-testid="stImage"] > img {
             object-fit: cover; 
             height: 200px; 
@@ -50,7 +51,7 @@ st.markdown("""
 
 @st.cache_data(ttl=300)
 def load_data(district_id):
-    """Fetches tree basin records closed in the last 18 months."""
+    """Fetches all Tree Basin records closed by PW in the last 18 months."""
     eighteen_months_ago = (datetime.now() - timedelta(days=548)).strftime('%Y-%m-%dT%H:%M:%S')
     
     select_cols = (
@@ -58,18 +59,22 @@ def load_data(district_id):
         "service_details, status_notes, address, media_url, supervisor_district"
     )
     
-    # Logic from version 1: Focus on Backfill/Empty Tree Basins
-    details_filter = "(upper(service_details) LIKE '%TREE_BASIN%')"
-    
-    params = {
-        "$select": select_cols,
-        "$where": f"closed_date > '{eighteen_months_ago}' AND agency_responsible LIKE '%PW%' AND {details_filter}",
-        "$limit": 10000, # Increased limit for citywide stats
-        "$order": "closed_date DESC"
-    }
+    # Filter: Specifically targeting Tree Basin reports handled by Public Works
+    where_clause = (
+        f"closed_date > '{eighteen_months_ago}' "
+        "AND agency_responsible LIKE '%PW%' "
+        "AND (upper(service_details) LIKE '%TREE_BASIN%')"
+    )
 
     if district_id != "Citywide":
-        params["$where"] += f" AND supervisor_district = '{district_id}'"
+        where_clause += f" AND supervisor_district = '{district_id}'"
+
+    params = {
+        "$select": select_cols,
+        "$where": where_clause,
+        "$limit": 5000,
+        "$order": "closed_date DESC"
+    }
 
     try:
         r = requests.get(API_URL, params=params)
@@ -96,12 +101,14 @@ def get_valid_image_url(media_item):
 # --- 4. MAIN APP LOGIC ---
 
 def main():
-    st.header("SF Tree Basins: Maintenance Cancellations")
-    st.write("Visualizing tree basin requests closed as 'Cancelled - Planned Maintenance'.")
+    st.header("SF Tree Basin Maintenance Tracker")
+    st.write("Visualizing all 311 tree basin reports (backfill/empty) closed by Public Works.")
     
-    # District Filter
+    # --- Filter Logic ---
     query_params = st.query_params
     url_district = query_params.get("district", "Citywide")
+    
+    # Validation
     if url_district not in SUPERVISOR_MAP and url_district != "Citywide":
         url_district = "Citywide"
 
@@ -113,7 +120,7 @@ def main():
             index=(["Citywide"] + list(SUPERVISOR_MAP.values())).index(SUPERVISOR_MAP.get(url_district, "Citywide"))
         )
 
-    # Update URL
+    # Sync URL with Selection
     rev_map = {v: k for k, v in SUPERVISOR_MAP.items()}
     rev_map["Citywide"] = "Citywide"
     selected_id = rev_map[selected_label]
@@ -121,42 +128,39 @@ def main():
 
     st.markdown("---")
 
-    with st.spinner("Fetching data..."):
+    with st.spinner("Fetching 311 records..."):
         df = load_data(selected_id)
 
     if df.empty:
-        st.warning("No records found matching criteria.")
+        st.warning("No closed tree basin records found for this selection.")
         return
 
-    # Stats Calculation
-    df['status_notes'] = df['status_notes'].astype(str)
-    cancelled_df = df[df['status_notes'] == 'Cancelled - Planned Maintenance'].copy()
-    
+    # --- Stats Display ---
     total_count = len(df)
-    cancelled_count = len(cancelled_df)
-    perc = (cancelled_count / total_count * 100) if total_count > 0 else 0
+    # Calculate average resolution time
+    df['days_to_close'] = (df['closed_date'] - df['requested_datetime']).dt.days
+    avg_days = df['days_to_close'].mean() if not df['days_to_close'].dropna().empty else 0
 
     st.markdown(
         f"""
         <div class='metric-container'>
             <span class='metric-text'>
-                Found <b>{total_count:,}</b> tree basin records total.<br>
-                <b>{cancelled_count:,}</b> were "Cancelled - Planned Maintenance" ({perc:.1f}%).
+                Showing <b>{total_count:,}</b> completed tree basin requests.<br>
+                Average resolution time: <b>{avg_days:.1f} days</b>.
             </span>
         </div>
         """, 
         unsafe_allow_html=True
     )
 
-    # Filter for Images
-    cancelled_df['valid_image'] = cancelled_df['media_url'].apply(get_valid_image_url)
-    display_df = cancelled_df.dropna(subset=['valid_image'])
+    # --- Image Grid ---
+    df['valid_image'] = df['media_url'].apply(get_valid_image_url)
+    display_df = df.dropna(subset=['valid_image'])
 
     if display_df.empty:
-        st.info("No images available for these cancelled requests.")
+        st.info("No photos available for these records.")
         return
 
-    # Image Grid
     COLS_PER_ROW = 4
     cols = st.columns(COLS_PER_ROW)
 
@@ -165,21 +169,18 @@ def main():
             with st.container(border=True):
                 st.image(row['valid_image'], use_container_width=True)
                 
-                # Dates & Calculations
+                # Metadata
                 opened_str = row['requested_datetime'].strftime('%m/%d/%y') if pd.notnull(row['requested_datetime']) else "?"
                 closed_str = row['closed_date'].strftime('%m/%d/%y') if pd.notnull(row['closed_date']) else "?"
-                days_open = (row['closed_date'] - row['requested_datetime']).days if (pd.notnull(row['requested_datetime']) and pd.notnull(row['closed_date'])) else "?"
+                days_open = row['days_to_close'] if pd.notnull(row['days_to_close']) else "?"
 
-                # Address & Maps
-                addr = row.get('address', 'Location N/A')
-                short_addr = addr.split(',')[0]
-                map_url = f"https://www.google.com/maps/search/?api=1&query={addr.replace(' ', '+')}"
+                addr = row.get('address', 'Location N/A').split(',')[0]
+                map_url = f"https://www.google.com/maps/search/?api=1&query={addr.replace(' ', '+')}+San+Francisco"
                 
-                # Ticket Link
                 ticket_id = row['service_request_id']
                 ticket_url = f"https://mobile311.sfgov.org/tickets/{ticket_id}"
 
-                st.markdown(f"**[{short_addr}]({map_url})**")
+                st.markdown(f"**[{addr}]({map_url})**")
                 st.caption(f"📅 {opened_str} ➔ {closed_str} ({days_open} days)")
                 st.markdown(f"Ticket: [{ticket_id}]({ticket_url})")
 

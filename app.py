@@ -322,4 +322,12 @@ def main():
                 st.markdown(f"""
                     <p class="card-text"><b><a href="{map_url}" target="_blank">{addr}</a></b></p>
                     <p class="card-text" style="color: #9E9E9E;">{opened_str} ➔ {closed_str} ({days_diff} days)</p>
-                    <p class="card
+                    <p class="card-text">{service}</p>
+                    <p class="note-text">Note: <a href="{ticket_url}" target="_blank">{notes}</a></p>
+                """, unsafe_allow_html=True)
+    
+    if len(display_df) > 200:
+        st.caption("Note: Showing first 200 images for performance. Filter by district to see more specific results.")
+
+if __name__ == "__main__":
+    main()

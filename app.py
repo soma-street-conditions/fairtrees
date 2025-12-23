@@ -1,138 +1,135 @@
 import streamlit as st
 import pandas as pd
 import requests
-import json
 from datetime import datetime, timedelta
 
-# 1. Page Config
-st.set_page_config(page_title="SF 311: The Visual Wall", page_icon="🧱", layout="wide")
+# 1. Page Configuration
+st.set_page_config(
+    page_title="SF 311: The Purge Visualizer", 
+    page_icon="📸", 
+    layout="wide"
+)
 
-# --- STYLING ---
+# --- CSS STYLING ---
 st.markdown("""
     <style>
-        /* Tighten up the grid */
-        div[data-testid="stVerticalBlock"] > div { gap: 0.5rem; }
-        .stMarkdown p { font-size: 0.85rem; margin-bottom: 0px; }
-        /* Hide full screen buttons on images to make it look cleaner */
-        button[title="View fullscreen"] { display: none; }
+        .block-container { padding-top: 2rem; }
+        div[data-testid="column"] { background-color: #f9f9f9; border-radius: 8px; padding: 10px; }
+        img { border-radius: 5px; }
     </style>
 """, unsafe_allow_html=True)
 
-# 2. Session State
-if 'limit' not in st.session_state:
-    st.session_state.limit = 400
-
-# Header
-st.header("Bureau of Urban Forestry: The 'Planned Maintenance' Wall")
-st.markdown("""
-**Visualizing the Backlog:** Every image below represents a resident report of an **Empty Tree Basin** that was closed without planting, cited as "Planned Maintenance".
-""")
+# 2. Header
+st.title("Bureau of Urban Forestry: The 'Planned Maintenance' Wall")
+st.markdown("Visualizing **Empty Tree Basin** requests that were administratively closed without work.")
 st.markdown("---")
 
-# --- SIDEBAR FILTERS ---
-st.sidebar.header("Filters")
-district_options = ["Citywide"] + [str(i) for i in range(1, 12)]
-selected_district = st.sidebar.selectbox("Supervisor District", district_options, index=0)
+# 3. TOP ROW FILTERS
+c1, c2 = st.columns([1, 1])
 
-# Limit Slider
-st.sidebar.markdown("---")
-st.session_state.limit = st.sidebar.slider("Records to Fetch", 100, 2000, 400, step=100)
+with c1:
+    # District Filter
+    districts = ["Citywide"] + [str(i) for i in range(1, 12)]
+    selected_district = st.selectbox("Supervisor District", districts, index=0)
 
-# 3. API Setup
-lookback_date = (datetime.now() - timedelta(days=730)).strftime('%Y-%m-%dT%H:%M:%S')
-base_url = "https://data.sfgov.org/resource/vw6y-z8j6.json"
+with c2:
+    # Limit Filter
+    # I increased the defaults because we are filtering out so many private images
+    limit = st.selectbox("Max Records to Check", [500, 1000, 2000, 5000], index=1)
 
-# 4. Query Construction
-where_clauses = [
-    f"closed_date > '{lookback_date}'",
-    "service_details = 'empty_tree_basin'",
-    "upper(status_notes) LIKE '%PLANNED%'",
-    "media_url IS NOT NULL"
-]
+# 4. DATA FETCHING
+API_URL = "https://data.sfgov.org/resource/vw6y-z8j6.json"
+
+# Look back 2 years
+lookback = (datetime.now() - timedelta(days=730)).strftime('%Y-%m-%dT%H:%M:%S')
+
+# Query Construction
+where_query = f"service_details = 'empty_tree_basin' AND status = 'Closed' AND upper(status_notes) LIKE '%PLANNED%' AND closed_date > '{lookback}' AND media_url IS NOT NULL"
 
 if selected_district != "Citywide":
-    where_clauses.append(f"supervisor_district = '{selected_district}'")
+    where_query += f" AND supervisor_district = '{selected_district}'"
 
 params = {
-    "$where": " AND ".join(where_clauses),
+    "$where": where_query,
     "$order": "closed_date DESC",
-    "$limit": st.session_state.limit
+    "$limit": limit
 }
 
-# 5. Fetch Data
 @st.cache_data(ttl=300)
-def get_data(query_params):
+def fetch_and_clean_data(params):
     try:
-        r = requests.get(base_url, params=query_params)
+        r = requests.get(API_URL, params=params)
         if r.status_code == 200:
-            return pd.DataFrame(r.json())
-        else:
-            return pd.DataFrame()
-    except:
+            df = pd.DataFrame(r.json())
+            
+            # --- CRITICAL STEP: FILTER FOR CLOUDINARY ONLY ---
+            if not df.empty and 'media_url' in df.columns:
+                # Convert media_url column to string to handle dicts/json
+                df['media_url'] = df['media_url'].astype(str)
+                
+                # Filter: Keep ONLY rows where URL contains "cloudinary"
+                # This drops all Verint (private) and text-only rows
+                clean_df = df[df['media_url'].str.contains("cloudinary", case=False, na=False)].copy()
+                
+                # Extract the clean URL
+                # The API often returns: {'url': 'http...'} or just 'http...'
+                # Since we know it contains 'cloudinary', we can just clean the string
+                def extract_url(val):
+                    # If it looks like a dict string, try to grab the url
+                    if "'url':" in val or '"url":' in val:
+                        # Quick dirty parse to avoid JSON overhead if possible
+                        try:
+                            return val.split("'url': '")[1].split("'")[0]
+                        except:
+                            try:
+                                return val.split('"url": "')[1].split('"')[0]
+                            except:
+                                return val # Return as is if parse fails
+                    return val
+                
+                clean_df['clean_image'] = clean_df['media_url'].apply(extract_url)
+                return clean_df
+            
+            return pd.DataFrame() # Return empty if no columns matches
+            
+    except Exception as e:
         return pd.DataFrame()
-
-df = get_data(params)
-
-# 6. ROBUST URL PARSER (The Fix)
-def extract_clean_url(media_item):
-    if not media_item:
-        return None
     
-    url = None
-    
-    # Case A: It's a dictionary object
-    if isinstance(media_item, dict):
-        url = media_item.get('url')
-    
-    # Case B: It's a string that LOOKS like a dictionary "{"url":...}"
-    elif isinstance(media_item, str):
-        try:
-            # Try to fix double quotes if present
-            if media_item.startswith('{'):
-                # SODA sometimes returns stringified JSON
-                data = json.loads(media_item)
-                url = data.get('url')
-            else:
-                # It's just a plain URL string
-                url = media_item
-        except:
-            # If parsing fails, treat the string as the url
-            url = media_item
+    return pd.DataFrame()
 
-    # FILTER: Remove Verint (Private) links
-    if url and "verintcloudservices" in url:
-        return None # Skip these, they don't render
-        
-    return url
+# Load Data
+with st.spinner(f"Scanning the last {limit} records for public images..."):
+    df = fetch_and_clean_data(params)
 
-# 7. Display The Wall
+# 5. MAIN DISPLAY
 if not df.empty:
-    
-    # Filter list down to only valid images FIRST
-    valid_records = []
-    for index, row in df.iterrows():
-        clean_url = extract_clean_url(row.get('media_url'))
-        if clean_url:
-            row['clean_image_url'] = clean_url
-            valid_records.append(row)
-    
-    st.write(f"Showing **{len(valid_records)}** viewable images.")
+    st.success(f"Found **{len(df)}** publicly viewable images.")
     
     # Grid Layout (4 columns)
     cols = st.columns(4)
     
-    for i, row in enumerate(valid_records):
-        col_index = i % 4
-        with cols[col_index]:
-            # The Image
-            st.image(row['clean_image_url'], use_container_width=True)
+    for i, row in enumerate(df.itertuples()):
+        col = cols[i % 4]
+        with col:
+            # Display Image
+            st.image(row.clean_image, use_container_width=True)
             
-            # Minimal Details
-            closed_date = str(row.get('closed_date', ''))[:10]
-            address = str(row.get('address', 'SF')).split(',')[0]
+            # Details
+            closed_date = str(getattr(row, 'closed_date', ''))[:10]
+            addr = str(getattr(row, 'address', 'SF')).split(',')[0]
             
-            # Caption
-            st.caption(f"📍 {address} | 📅 Closed: {closed_date}")
-            
+            # Visual Flag for the "Purge" Dates
+            if closed_date in ['2025-12-04', '2025-12-05']:
+                st.markdown(f"**📍 {addr}**")
+                st.error(f"PURGED: {closed_date}")
+            else:
+                st.markdown(f"**📍 {addr}**")
+                st.caption(f"Closed: {closed_date}")
+
 else:
-    st.info("No records found matching these criteria.")
+    st.warning("No public images found.")
+    st.markdown("""
+    **Why?** It appears all recent tickets matching your criteria contain images hosted on the City's internal **Verint** system, which blocks public access. 
+    
+    Try increasing the **"Max Records"** filter to 2000+ to look further back in time for older Cloudinary images.
+    """)

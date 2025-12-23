@@ -4,7 +4,7 @@ import requests
 from datetime import datetime, timedelta
 
 # --- 1. CONFIGURATION ---
-st.set_page_config(page_title="SF Tree Basins", page_icon="🌳", layout="wide")
+st.set_page_config(page_title="SF Tree Basin Maintenance", page_icon="🌳", layout="wide")
 
 API_URL = "https://data.sfgov.org/resource/vw6y-z8j6.json"
 
@@ -23,7 +23,7 @@ def load_data(district_id):
     
     start_date = (datetime.now() - timedelta(days=548)).strftime('%Y-%m-%dT%H:%M:%S')
 
-    # Query: Closed > 18 months ago, PW Agency, "Tree Basin" in details
+    # Query: Any status, closed > 18 months ago, PW agency, tree_basin service details
     where_clause = (
         f"closed_date > '{start_date}' "
         "AND agency_responsible LIKE '%PW%' "
@@ -48,7 +48,6 @@ def load_data(district_id):
         if not df.empty:
             df['requested_datetime'] = pd.to_datetime(df['requested_datetime'], errors='coerce')
             df['closed_date'] = pd.to_datetime(df['closed_date'], errors='coerce')
-            # Fill N/A notes to avoid errors
             df['status_notes'] = df['status_notes'].fillna("No notes available.")
             df['service_details'] = df['service_details'].fillna("")
         
@@ -70,21 +69,24 @@ def get_image_url(media_item):
 # --- 3. MAIN APP ---
 
 def main():
-    st.title("🌳 SF Tree Basin Maintenance")
-    st.caption("Visualizing 'Tree Basin' requests (Public Works) closed in the last 18 months.")
+    # --- UPDATED HEADERS ---
+    st.header("SF Tree Basin Maintenance")
+    st.write("Visualizing 311 reports for tree basin maintenance (backfill and empty) closed by Public Works.")
 
     # --- Sidebar & Filters ---
     qp = st.query_params
     default_dist = qp.get("district", "Citywide")
     if default_dist not in SUPERVISORS: default_dist = "Citywide"
 
-    opts = ["Citywide"] + list(SUPERVISORS.keys())
-    selected_id = st.selectbox(
-        "Filter by District:",
-        options=opts,
-        index=opts.index(default_dist),
-        format_func=lambda x: SUPERVISORS.get(x, "Citywide")
-    )
+    col_filter, _ = st.columns([1, 3])
+    with col_filter:
+        opts = ["Citywide"] + list(SUPERVISORS.keys())
+        selected_id = st.selectbox(
+            "Filter by Supervisor District:",
+            options=opts,
+            index=opts.index(default_dist),
+            format_func=lambda x: SUPERVISORS.get(x, "Citywide")
+        )
 
     if selected_id == "Citywide":
         if "district" in st.query_params: del st.query_params["district"]
@@ -94,24 +96,26 @@ def main():
     st.divider()
 
     # --- Load Data ---
-    with st.spinner("Loading tree basin data..."):
+    with st.spinner("Fetching data..."):
         df = load_data(selected_id)
 
     if df.empty:
-        st.info("No records found matching these criteria.")
+        st.warning("No records found matching criteria.")
         return
 
     df['valid_image'] = df['media_url'].apply(get_image_url)
     display_df = df.dropna(subset=['valid_image'])
     
-    st.markdown(f"**Found {len(display_df)} records with images** out of {len(df)} total closed requests.")
+    # Updated text description
+    st.write(f"Showing **{len(display_df)}** records with photos out of **{len(df)}** total closed requests.")
 
     if display_df.empty:
+        st.info("No images available for these requests.")
         return
 
     st.divider()
     
-    # --- Grid Display ---
+    # --- Image Grid ---
     COLS_PER_ROW = 4
     cols = st.columns(COLS_PER_ROW)
 
@@ -122,32 +126,29 @@ def main():
             with st.container(border=True):
                 st.image(row['valid_image'], use_container_width=True)
                 
-                # --- Text Formatting ---
-                # 1. Address
-                addr_short = row.get('address', 'Unknown').split(',')[0]
-                map_url = f"https://www.google.com/maps/search/?api=1&query={addr_short}+San+Francisco"
-                st.markdown(f"**[{addr_short}]({map_url})**")
-
-                # 2. Dates
+                # --- Restored and formatted text ---
+                addr_clean = row.get('address', 'Location N/A')
+                short_addr = addr_clean.split(',')[0]
+                map_url = f"https://www.google.com/maps/search/?api=1&query={addr_clean.replace(' ', '+')}"
+                
                 opened = row['requested_datetime'].strftime('%m/%d/%y') if pd.notnull(row['requested_datetime']) else "?"
                 closed = row['closed_date'].strftime('%m/%d/%y') if pd.notnull(row['closed_date']) else "?"
-                st.caption(f"Opened {opened}, Closed {closed}")
-
-                # 3. Duration
+                
                 days_open = "?"
                 if pd.notnull(row['requested_datetime']) and pd.notnull(row['closed_date']):
                     days_open = (row['closed_date'] - row['requested_datetime']).days
-                st.caption(f"Open {days_open} days")
 
-                # 4. Request Details
+                st.markdown(f"**[{short_addr}]({map_url})**")
+                st.caption(f"Opened {opened}, Closed {closed}")
+                st.caption(f"Open {days_open} days")
                 st.caption(f"Request Details: {row['service_details']}")
 
-                # 5. Status Notes (Clickable/Expandable)
-                # This hides the notes until clicked, keeping the card tidy
+                # Clickable/Expandable Status Notes
                 with st.expander("Status Notes"):
                     st.write(row['status_notes'])
-                    ticket_url = f"https://mobile311.sfgov.org/tickets/{row['service_request_id']}"
-                    st.markdown(f"[View Ticket {row['service_request_id']}]({ticket_url})")
+                    ticket_id = row['service_request_id']
+                    ticket_url = f"https://mobile311.sfgov.org/tickets/{ticket_id}"
+                    st.markdown(f"[View Ticket {ticket_id}]({ticket_url})")
 
 if __name__ == "__main__":
     main()

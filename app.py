@@ -18,11 +18,11 @@ st.markdown("""
 
 # 2. Session State
 if 'limit' not in st.session_state:
-    st.session_state.limit = 2000
+    st.session_state.limit = 1000
 
 # Header
 st.header("SF Citywide: Planned Maintenance Cancellations")
-st.write("Visualizing 311 reports closed as 'Cancelled - Planned Maintenance' by Public Works (Citywide).")
+st.write("Visualizing 311 reports closed as 'Cancelled - Planned Maintenance' by Public Works.")
 st.markdown("---")
 
 # 3. Date Setup
@@ -30,61 +30,29 @@ eighteen_months_ago = (datetime.now() - timedelta(days=548)).strftime('%Y-%m-%dT
 base_url = "https://data.sfgov.org/resource/vw6y-z8j6.json"
 
 # 4. API Query
-# Broad fetch: Get closed items with images. We will filter the rest in Python.
+# UPDATED: Now using the correct field names you provided:
+# - agency_responsible
+# - status_notes
+# - closed_date
 params = {
-    "$where": f"closed_date > '{eighteen_months_ago}' AND media_url IS NOT NULL",
+    "$where": f"closed_date > '{eighteen_months_ago}' AND media_url IS NOT NULL AND status_notes = 'Cancelled - Planned Maintenance' AND agency_responsible LIKE '%PW%'",
     "$order": "closed_date DESC",
     "$limit": st.session_state.limit
 }
 
-# 5. Fetch & Filter Data
+# 5. Fetch Data
 @st.cache_data(ttl=300)
 def get_data(query_limit):
     try:
         r = requests.get(base_url, params=params)
         if r.status_code == 200:
-            raw_df = pd.DataFrame(r.json())
-            
-            if raw_df.empty:
-                return pd.DataFrame()
-
-            # --- SMART COLUMN DETECTION ---
-            # The API column names can vary. We search for the right ones.
-            
-            # 1. Find the 'Agency' column (looks for 'agency' in column name)
-            agency_col = next((col for col in raw_df.columns if 'agency' in col.lower()), None)
-            
-            # 2. Find the 'Status Notes' column (looks for 'notes' in column name)
-            notes_col = next((col for col in raw_df.columns if 'notes' in col.lower()), 'status_notes')
-
-            if not agency_col:
-                st.error(f"Could not find an 'Agency' column. Available columns: {raw_df.columns.tolist()}")
-                return pd.DataFrame()
-
-            # --- PYTHON FILTERING ---
-            # Ensure columns are strings to avoid errors
-            raw_df[agency_col] = raw_df[agency_col].astype(str)
-            raw_df[notes_col] = raw_df[notes_col].astype(str)
-
-            # Filter: 
-            # 1. Agency has 'PW' (Matches 'PW - Urban Forestry' from your CSV)
-            # 2. Notes has 'Planned Maintenance'
-            filtered_df = raw_df[
-                (raw_df[agency_col].str.contains('PW', case=False, na=False)) & 
-                (raw_df[notes_col].str.contains('Planned Maintenance', case=False, na=False))
-            ]
-            
-            # Save the detected column names to the dataframe for display loop to use
-            filtered_df._agency_col_name = agency_col
-            filtered_df._notes_col_name = notes_col
-            
-            return filtered_df
+            df = pd.DataFrame(r.json())
+            return df
         else:
-            st.error(f"API Request Failed: {r.status_code}")
+            st.error(f"API Error {r.status_code}: {r.text}")
             return pd.DataFrame()
-            
     except Exception as e:
-        st.error(f"Detailed Error: {e}")
+        st.error(f"Connection Error: {e}")
         return pd.DataFrame()
 
 df = get_data(st.session_state.limit)
@@ -101,12 +69,9 @@ def get_image_info(media_item):
 
 # 7. Display Feed
 if not df.empty:
-    st.success(f"Found {len(df)} records matching criteria.")
+    st.success(f"Found {len(df)} records.")
     cols = st.columns(4)
     display_count = 0
-    
-    # Retrieve the detected column names (defaults if lost)
-    notes_col = getattr(df, '_notes_col_name', 'status_notes')
     
     for index, row in df.iterrows():
         full_url, is_viewable = get_image_info(row.get('media_url'))
@@ -117,6 +82,7 @@ if not df.empty:
                 with st.container(border=True):
                     st.image(full_url, use_container_width=True)
 
+                    # Metadata using correct fields
                     if 'closed_date' in row:
                         date_str = pd.to_datetime(row['closed_date']).strftime('%b %d, %Y')
                     else:
@@ -130,10 +96,7 @@ if not df.empty:
                     st.markdown(f"**{neighborhood}**")
                     st.markdown(f"Closed: {date_str}")
                     st.markdown(f"[{short_address}]({map_url})")
-                    
-                    # Display the note we filtered on
-                    note_text = row.get(notes_col, '')
-                    st.caption(f"Note: {note_text[:60]}...")
+                    st.caption(f"ID: {row.get('service_request_id', 'N/A')}")
             
             display_count += 1
             
@@ -149,7 +112,7 @@ if not df.empty:
             st.rerun()
 
 else:
-    st.warning("No records found. If this persists, the API might be temporarily down or returning empty data.")
+    st.warning("No records found matching 'Cancelled - Planned Maintenance' for PW in the last 18 months.")
 
 # Footer
 st.markdown("---")

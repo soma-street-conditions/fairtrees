@@ -3,7 +3,7 @@ import pandas as pd
 import requests
 from datetime import datetime, timedelta
 
-# --- 1. CONFIGURATION & CONSTANTS ---
+# --- 1. CONFIGURATION ---
 st.set_page_config(page_title="SF Tree Basin Maintenance", page_icon="🌳", layout="wide")
 
 API_URL = "https://data.sfgov.org/resource/vw6y-z8j6.json"
@@ -15,41 +15,79 @@ SUPERVISOR_MAP = {
     "10": "10 - Shamann Walton", "11": "11 - Chyanne Chen"
 }
 
-# --- 2. STYLING ---
+# --- 2. ADVANCED STYLING ---
 st.markdown("""
     <style>
-        /* Tighten vertical spacing */
-        div[data-testid="stVerticalBlock"] > div { gap: 0.1rem; }
+        /* Tighter vertical spacing globally */
+        div[data-testid="stVerticalBlock"] > div { gap: 0rem; }
         
-        /* Unified font for card text */
+        /* CARD TEXT: Smaller and tighter */
         .card-text {
             font-family: "Source Sans Pro", sans-serif;
-            font-size: 0.85rem;
+            font-size: 12px;
             line-height: 1.3;
-            color: #FAFAFA;
+            color: #E0E0E0;
             margin: 0px;
         }
         
-        /* Enforce uniform image heights */
+        /* IMAGES: Uniform height */
         div[data-testid="stImage"] > img {
             object-fit: cover; 
-            height: 200px; 
+            height: 180px; 
             width: 100%;
             border-radius: 4px;
         }
         
-        /* Metrics/Table container styling */
-        .metric-container {
-            background-color: #0E1117; 
-            border: 1px solid #303030;
-            border-radius: 5px;
-            padding: 15px;
-            margin-bottom: 20px;
+        /* TABLE: Modern Dashboard Style */
+        .styled-table-container {
+            display: flex;
+            justify-content: center;
+            margin-top: 10px;
+            margin-bottom: 25px;
+        }
+        .styled-table {
+            border-collapse: collapse;
+            font-family: "Source Sans Pro", sans-serif;
+            font-size: 13px;
+            min-width: 500px;
+            width: 60%;
+            background-color: #161B22;
+            border-radius: 6px;
+            overflow: hidden;
+            border: 1px solid #30363D;
+        }
+        .styled-table thead tr {
+            background-color: #21262D;
+            color: #8B949E;
+            text-align: left;
+            font-weight: 600;
+        }
+        .styled-table th, .styled-table td {
+            padding: 8px 15px;
+            border-bottom: 1px solid #30363D;
+        }
+        .styled-table tbody tr:hover {
+            background-color: #1F242C;
+        }
+        .styled-table tbody tr:last-child td {
+            border-bottom: none;
+        }
+        
+        /* Link Styling */
+        a { color: #58A6FF; text-decoration: none; }
+        a:hover { text-decoration: underline; }
+        
+        /* Highlight Text */
+        .highlight-text {
+            font-size: 1.1rem;
+            font-weight: 600;
+            color: #FFFFFF;
+            margin-bottom: 10px;
         }
     </style>
 """, unsafe_allow_html=True)
 
-# --- 3. HELPER FUNCTIONS ---
+# --- 3. LOGIC ---
 
 @st.cache_data(ttl=600)
 def load_data(district_id):
@@ -60,7 +98,6 @@ def load_data(district_id):
         "service_details, status_notes, address, media_url"
     )
     
-    # Filter: Closed, PW, Tree Basin
     where_clause = (
         f"closed_date > '{eighteen_months_ago}' "
         "AND agency_responsible LIKE '%PW%' "
@@ -100,22 +137,14 @@ def get_valid_image_url(media_item):
     return None
 
 def get_category(note):
-    """Parses the first meaningful word from the status note."""
-    if not isinstance(note, str):
-        return "Unknown"
+    if not isinstance(note, str): return "Unknown"
+    note_lower = note.strip().lower()
     
-    note = note.strip()
-    note_lower = note.lower()
+    if note_lower.startswith("case is a duplicate"): return "Duplicate"
+    if note_lower.startswith("case resolved"): return "Resolved"
+    if note_lower.startswith("case transferred"): return "Transferred"
+    if note_lower.startswith("insufficient info"): return "Insufficient Info"
     
-    # specific handling to split 'Case' into useful buckets
-    if note_lower.startswith("case is a duplicate"):
-        return "Duplicate"
-    if note_lower.startswith("case resolved"):
-        return "Resolved"
-    if note_lower.startswith("case transferred"):
-        return "Transferred"
-        
-    # Default: take the first word (e.g., "Cancelled", "Administrative")
     return note.split(' ')[0].title()
 
 # --- 4. MAIN APP ---
@@ -123,56 +152,81 @@ def get_category(note):
 def main():
     st.header("SF Tree Basin Maintenance Tracker")
     
-    # Filter Logic
+    # Filter Setup
     query_params = st.query_params
     url_district = query_params.get("district", "Citywide")
-    
     district_list = ["Citywide"] + list(SUPERVISOR_MAP.values())
-    default_idx = district_list.index(SUPERVISOR_MAP.get(url_district, "Citywide"))
-
+    
+    current_sel = SUPERVISOR_MAP.get(url_district, "Citywide")
+    if current_sel not in district_list: current_sel = "Citywide"
+    
     col_filter, _ = st.columns([1, 3])
     with col_filter:
-        selected_label = st.selectbox("Supervisor District:", district_list, index=default_idx)
+        selected_label = st.selectbox("Supervisor District:", district_list, index=district_list.index(current_sel))
 
     rev_map = {v: k for k, v in SUPERVISOR_MAP.items()}
     rev_map["Citywide"] = "Citywide"
     selected_id = rev_map[selected_label]
     st.query_params["district"] = selected_id
 
+    # Load Full Data
     df = load_data(selected_id)
 
     if df.empty:
         st.warning("No records found.")
         return
 
-    # --- Closure Reason Statistics ---
-    # Apply category logic
-    df['closure_reason'] = df['status_notes'].apply(get_category)
-    
-    # Group and Calculate
-    stats = df['closure_reason'].value_counts().reset_index()
-    stats.columns = ['Closure Reason', 'Count']
-    stats['% of Cases'] = (stats['Count'] / len(df) * 100).map('{:.1f}%'.format)
-    
-    # Display Stats
-    st.markdown("##### Closure Reasons Summary")
-    with st.container():
-        # Using a dataframe with hidden index for a cleaner look
-        st.dataframe(
-            stats, 
-            use_container_width=True, 
-            hide_index=True,
-            column_config={
-                "Closure Reason": st.column_config.TextColumn("Reason"),
-                "Count": st.column_config.NumberColumn("Total Cases"),
-                "% of Cases": st.column_config.TextColumn("Percentage"),
-            }
-        )
-    st.markdown("---")
-
-    # --- Image Grid ---
+    # --- PRE-CALCULATE IMAGE DATA ---
+    # We do this early so we can display the count at the top
     df['valid_image'] = df['media_url'].apply(get_valid_image_url)
     display_df = df.dropna(subset=['valid_image'])
+    # Deduplicate based on image URL
+    display_df = display_df.drop_duplicates(subset=['valid_image'])
+    image_count = len(display_df)
+
+    # --- DISPLAY COUNT TEXT ---
+    st.markdown(f"<p class='highlight-text'>Showing {image_count} cases with images</p>", unsafe_allow_html=True)
+
+    # --- STATS TABLE (Uses Full Dataset) ---
+    df['closure_reason'] = df['status_notes'].apply(get_category)
+    stats = df['closure_reason'].value_counts().reset_index()
+    stats.columns = ['Reason', 'Count']
+    total_cases = len(df)
+    
+    table_rows = ""
+    for _, row in stats.iterrows():
+        pct = (row['Count'] / total_cases) * 100
+        table_rows += f"""
+            <tr>
+                <td>{row['Reason']}</td>
+                <td>{row['Count']:,}</td>
+                <td>{pct:.1f}%</td>
+            </tr>
+        """
+
+    st.markdown(f"""
+        <div class="styled-table-container">
+            <table class="styled-table">
+                <thead>
+                    <tr>
+                        <th style="width: 40%;">Closure Reason</th>
+                        <th style="width: 30%;">Cases ({total_cases:,})</th>
+                        <th style="width: 30%;">%</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {table_rows}
+                </tbody>
+            </table>
+        </div>
+    """, unsafe_allow_html=True)
+    
+    st.markdown("---")
+
+    # --- IMAGE GRID SECTION ---
+    if display_df.empty:
+        st.info("No unique images found for these records.")
+        return
 
     COLS_PER_ROW = 4
     cols = st.columns(COLS_PER_ROW)
@@ -180,36 +234,29 @@ def main():
     for i, (index, row) in enumerate(display_df.iterrows()):
         with cols[i % COLS_PER_ROW]:
             with st.container(border=True):
-                # Image
                 st.image(row['valid_image'], use_container_width=True)
                 
-                # Calculations
+                # Metadata
                 opened = row['requested_datetime']
                 closed = row['closed_date']
-                
                 opened_str = opened.strftime('%m/%d/%y') if pd.notnull(opened) else "?"
                 closed_str = closed.strftime('%m/%d/%y') if pd.notnull(closed) else "?"
+                days_diff = (closed - opened).days if (pd.notnull(opened) and pd.notnull(closed)) else "?"
                 
-                days_diff = "?"
-                if pd.notnull(opened) and pd.notnull(closed):
-                    days_diff = (closed - opened).days
-                
-                # Text Content
                 service = str(row.get('service_details', 'N/A')).replace('_', ' ').title()
                 notes = str(row.get('status_notes', 'N/A'))
+                if len(notes) > 60: notes = notes[:60] + "..."
                 
                 addr = row.get('address', 'Location N/A').split(',')[0]
-                map_url = f"https://www.google.com/maps/search/?api=1&query={addr.replace(' ', '+')}+San+Francisco"
                 
-                ticket_id = row['service_request_id']
-                ticket_url = f"https://mobile311.sfgov.org/tickets/{ticket_id}"
+                map_url = f"https://www.google.com/maps/search/?api=1&query={addr.replace(' ', '+')}+San+Francisco"
+                ticket_url = f"https://mobile311.sfgov.org/tickets/{row['service_request_id']}"
 
-                # Dense Text Block
                 st.markdown(f"""
-                    <p class="card-text"><b><a href="{map_url}" target="_blank" style="color: #60B4FF; text-decoration: none;">{addr}</a></b></p>
-                    <p class="card-text">{opened_str} ➔ {closed_str} ({days_diff} days)</p>
-                    <p class="card-text">Type: {service}</p>
-                    <p class="card-text">Closure note: <a href="{ticket_url}" target="_blank" style="color: #60B4FF; text-decoration: none;">{notes}</a></p>
+                    <p class="card-text"><b><a href="{map_url}" target="_blank">{addr}</a></b></p>
+                    <p class="card-text" style="color: #8B949E;">{opened_str} ➔ {closed_str} ({days_diff} days)</p>
+                    <p class="card-text">{service}</p>
+                    <p class="card-text">Note: <a href="{ticket_url}" target="_blank">{notes}</a></p>
                 """, unsafe_allow_html=True)
 
 if __name__ == "__main__":

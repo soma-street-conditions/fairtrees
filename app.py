@@ -23,28 +23,40 @@ if 'limit' not in st.session_state:
 # Header
 st.header("SF Citywide: Planned Maintenance Cancellations")
 st.write("Visualizing 311 reports closed as 'Cancelled - Planned Maintenance' by Public Works.")
+
+# --- NEW: SUPERVISOR DISTRICT FILTER ---
+# Create a list of options: Citywide + Districts 1-11
+district_options = ["Citywide"] + [str(i) for i in range(1, 12)]
+
+col_filter, col_spacer = st.columns([1, 3])
+with col_filter:
+    selected_district = st.selectbox("Filter by Supervisor District:", district_options)
+
 st.markdown("---")
 
 # 3. Date Setup
 eighteen_months_ago = (datetime.now() - timedelta(days=548)).strftime('%Y-%m-%dT%H:%M:%S')
 base_url = "https://data.sfgov.org/resource/vw6y-z8j6.json"
 
-# 4. API Query
-# UPDATED: Now using the correct field names you provided:
-# - agency_responsible
-# - status_notes
-# - closed_date
+# 4. API Query Construction
+# Base query always applied
+where_clause = f"closed_date > '{eighteen_months_ago}' AND media_url IS NOT NULL AND status_notes = 'Cancelled - Planned Maintenance' AND agency_responsible LIKE '%PW%'"
+
+# Append District filter if not Citywide
+if selected_district != "Citywide":
+    where_clause += f" AND supervisor_district = '{selected_district}'"
+
 params = {
-    "$where": f"closed_date > '{eighteen_months_ago}' AND media_url IS NOT NULL AND status_notes = 'Cancelled - Planned Maintenance' AND agency_responsible LIKE '%PW%'",
+    "$where": where_clause,
     "$order": "closed_date DESC",
     "$limit": st.session_state.limit
 }
 
 # 5. Fetch Data
 @st.cache_data(ttl=300)
-def get_data(query_limit):
+def get_data(query_params):
     try:
-        r = requests.get(base_url, params=params)
+        r = requests.get(base_url, params=query_params)
         if r.status_code == 200:
             df = pd.DataFrame(r.json())
             return df
@@ -55,7 +67,8 @@ def get_data(query_limit):
         st.error(f"Connection Error: {e}")
         return pd.DataFrame()
 
-df = get_data(st.session_state.limit)
+# Pass params to the function so cache invalidates when filter changes
+df = get_data(params)
 
 # 6. Helper: Identify Image
 def get_image_info(media_item):
@@ -69,7 +82,8 @@ def get_image_info(media_item):
 
 # 7. Display Feed
 if not df.empty:
-    st.success(f"Found {len(df)} records.")
+    # Removed st.success() as requested
+    
     cols = st.columns(4)
     display_count = 0
     
@@ -82,7 +96,7 @@ if not df.empty:
                 with st.container(border=True):
                     st.image(full_url, use_container_width=True)
 
-                    # Metadata using correct fields
+                    # Metadata
                     if 'closed_date' in row:
                         date_str = pd.to_datetime(row['closed_date']).strftime('%b %d, %Y')
                     else:
@@ -112,7 +126,10 @@ if not df.empty:
             st.rerun()
 
 else:
-    st.warning("No records found matching 'Cancelled - Planned Maintenance' for PW in the last 18 months.")
+    if selected_district != "Citywide":
+        st.warning(f"No records found for Supervisor District {selected_district} matching these criteria.")
+    else:
+        st.warning("No records found matching 'Cancelled - Planned Maintenance' for PW in the last 18 months.")
 
 # Footer
 st.markdown("---")

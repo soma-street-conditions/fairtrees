@@ -135,34 +135,32 @@ def main():
 
     st.markdown("---")
     
-    # --- Image Grid (Original Logic Restored) ---
+   # --- Image Grid ---
     COLS_PER_ROW = 4
     cols = st.columns(COLS_PER_ROW)
 
     for i, (index, row) in enumerate(display_df.iterrows()):
-        col = cols[i % COLS_PER_ROW]
-        with col:
+        tile = cols[i % COLS_PER_ROW]
+        
+        with tile:
             with st.container(border=True):
+                # Image
                 st.image(row['valid_image'], use_container_width=True)
                 
-                opened_str = row['requested_datetime'].strftime('%m/%d/%y') if pd.notnull(row['requested_datetime']) else "?"
-                closed_str = row['closed_date'].strftime('%m/%d/%y') if pd.notnull(row['closed_date']) else "?"
+                # Data
+                req_date = row['requested_datetime']
+                cls_date = row['closed_date']
+                days_open = (cls_date - req_date).days if (pd.notnull(req_date) and pd.notnull(cls_date)) else "?"
                 
-                days_open = "?"
-                if pd.notnull(row['requested_datetime']) and pd.notnull(row['closed_date']):
-                    days_open = (row['closed_date'] - row['requested_datetime']).days
-
+                # Links
+                address = row.get('address', 'Unknown Location').split(',')[0]
+                map_link = f"https://www.google.com/maps/search/?api=1&query={address}+San+Francisco"
                 ticket_id = row['service_request_id']
-                ticket_url = f"https://mobile311.sfgov.org/tickets/{ticket_id}"
-                
-                addr_clean = row.get('address', 'Location N/A')
-                short_addr = addr_clean.split(',')[0]
-                map_url = f"https://www.google.com/maps/search/?api=1&query={addr_clean.replace(' ', '+')}"
-                
-                st.markdown(f"**[{short_addr}]({map_url})**")
-                st.caption(f"Opened: {opened_str} | Closed: {closed_str}")
-                st.caption(f"Days Open: {days_open}")
-                st.markdown(f"[View Ticket {ticket_id}]({ticket_url})")
+                ticket_link = f"https://mobile311.sfgov.org/tickets/{ticket_id}"
+
+                st.markdown(f"**[{address}]({map_link})**")
+                st.caption(f"🆔 [{ticket_id}]({ticket_link})")
+                st.caption(f"📅 Open: {days_open} days")
 
 if __name__ == "__main__":
     main()

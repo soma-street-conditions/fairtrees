@@ -13,7 +13,14 @@ st.markdown("""
         .stMarkdown p { font-size: 0.9rem; margin-bottom: 0px; }
         div.stButton > button { width: 100%; }
         .stCaption a { text-decoration: underline; color: #1f77b4; }
-        .metric-text { font-size: 1.1rem; font-weight: 500; color: #333; padding: 10px 0px; }
+        
+        /* Text color set to white */
+        .metric-text { 
+            font-size: 1.1rem; 
+            font-weight: 500; 
+            color: white; 
+            padding: 10px 0px; 
+        }
     </style>
     <meta name="robots" content="noindex, nofollow">
 """, unsafe_allow_html=True)
@@ -72,34 +79,17 @@ st.markdown("---")
 eighteen_months_ago = (datetime.now() - timedelta(days=548)).strftime('%Y-%m-%dT%H:%M:%S')
 base_url = "https://data.sfgov.org/resource/vw6y-z8j6.json"
 
-# --- CATEGORY EXCLUSIONS ---
-# These are filtered out of BOTH the counts and the feed.
-excluded_details = """(
-    'blocking_sidewalk', 
-    'blocking_street_lights', 
-    'damaged_vandalism', 
-    'other', 
-    'blocking_signs', 
-    'property_damage', 
-    'hitting_window_or_building',
-    'about_to_fall',
-    'fallen_tree',
-    'weeding',
-    'blocking_traffic_signal'
-)"""
+# --- CATEGORY INCLUSION ---
+# UPDATED: Only looking for these specific types now.
+included_details = "('backfill_tree_basin', 'empty_tree_basin')"
 
 # --- METRICS QUERY ---
 # Logic: "Total universe of relevant tickets"
-# - Date > 18 months
-# - Agency = PW
-# - NOT in excluded categories
-# - INCLUDES items without photos (to get accurate denominator)
-# - INCLUDES all closure reasons (to get total)
-
+# Denominator = PW Tickets > 18mo > IN included categories
 metrics_where = (
     f"closed_date > '{eighteen_months_ago}' "
     f"AND agency_responsible LIKE '%PW%' "
-    f"AND service_details NOT IN {excluded_details}"
+    f"AND service_details IN {included_details}"
 )
 
 if selected_id != "Citywide":
@@ -108,7 +98,6 @@ if selected_id != "Citywide":
 # 4. Fetch Metrics
 @st.cache_data(ttl=300)
 def get_metrics(where_clause):
-    # Only fetch counts, grouped by status. Very efficient.
     params = {
         "$select": "status_notes, count(*)",
         "$where": where_clause,
@@ -133,10 +122,10 @@ percentage = 0.0
 if not metrics_df.empty:
     metrics_df['count'] = pd.to_numeric(metrics_df['count'])
     
-    # Total = Sum of ALL tickets matching criteria (regardless of status/photo)
+    # Total = Sum of ALL tickets matching criteria (including those without photos)
     total_records = metrics_df['count'].sum()
     
-    # Cancelled = Just the 'Cancelled - Planned Maintenance' subset (regardless of photo)
+    # Cancelled = Just the 'Cancelled - Planned Maintenance' subset
     target_row = metrics_df[metrics_df['status_notes'] == 'Cancelled - Planned Maintenance']
     if not target_row.empty:
         cancelled_count = target_row['count'].iloc[0]
@@ -158,9 +147,7 @@ st.markdown("---")
 # 5. Fetch Feed Data
 # --- FEED QUERY ---
 # Logic: "Show me the photos"
-# - Start with the same base criteria as metrics (Date, Agency, Exclusions)
-# - ADD: Status = 'Cancelled - Planned Maintenance'
-# - ADD: Media URL IS NOT NULL (Strict API filter)
+# Must be Cancelled AND have an image
 feed_where = metrics_where + " AND status_notes = 'Cancelled - Planned Maintenance' AND media_url IS NOT NULL"
 
 params = {

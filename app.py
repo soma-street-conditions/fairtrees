@@ -24,13 +24,31 @@ if 'limit' not in st.session_state:
 st.header("SF Citywide: Planned Maintenance Cancellations")
 st.write("Visualizing 311 reports closed as 'Cancelled - Planned Maintenance' by Public Works.")
 
-# --- NEW: SUPERVISOR DISTRICT FILTER ---
-# Create a list of options: Citywide + Districts 1-11
+# --- DEEP LINKING & FILTERING ---
+
+# 1. Define Options
 district_options = ["Citywide"] + [str(i) for i in range(1, 12)]
 
+# 2. Check URL for existing selection (e.g. ?district=6)
+#    If the URL param is invalid, fallback to "Citywide"
+query_params = st.query_params
+url_district = query_params.get("district", "Citywide")
+
+if url_district not in district_options:
+    url_district = "Citywide"
+
+# 3. Create the Dropdown
 col_filter, col_spacer = st.columns([1, 3])
 with col_filter:
-    selected_district = st.selectbox("Filter by Supervisor District:", district_options)
+    # Set the 'index' based on the URL parameter
+    selected_district = st.selectbox(
+        "Filter by Supervisor District:", 
+        district_options,
+        index=district_options.index(url_district)
+    )
+
+# 4. Update the URL immediately when the user changes the selection
+st.query_params["district"] = selected_district
 
 st.markdown("---")
 
@@ -39,7 +57,6 @@ eighteen_months_ago = (datetime.now() - timedelta(days=548)).strftime('%Y-%m-%dT
 base_url = "https://data.sfgov.org/resource/vw6y-z8j6.json"
 
 # 4. API Query Construction
-# Base query always applied
 where_clause = f"closed_date > '{eighteen_months_ago}' AND media_url IS NOT NULL AND status_notes = 'Cancelled - Planned Maintenance' AND agency_responsible LIKE '%PW%'"
 
 # Append District filter if not Citywide
@@ -67,7 +84,7 @@ def get_data(query_params):
         st.error(f"Connection Error: {e}")
         return pd.DataFrame()
 
-# Pass params to the function so cache invalidates when filter changes
+# Pass params so cache invalidates when filter changes
 df = get_data(params)
 
 # 6. Helper: Identify Image
@@ -82,8 +99,6 @@ def get_image_info(media_item):
 
 # 7. Display Feed
 if not df.empty:
-    # Removed st.success() as requested
-    
     cols = st.columns(4)
     display_count = 0
     

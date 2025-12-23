@@ -6,7 +6,7 @@ from datetime import datetime, timedelta
 # 1. Page Config
 st.set_page_config(page_title="SF Streets: Maintenance", page_icon="🚧", layout="wide")
 
-# --- NO CRAWL & STYLING ---
+# --- STYLING ---
 st.markdown("""
     <style>
         div[data-testid="stVerticalBlock"] > div { gap: 0.2rem; }
@@ -14,7 +14,7 @@ st.markdown("""
         div.stButton > button { width: 100%; }
         .stCaption a { text-decoration: underline; color: #1f77b4; }
         
-        /* Text color set to white */
+        /* Stats Text: White */
         .metric-text { 
             font-size: 1.1rem; 
             font-weight: 500; 
@@ -25,13 +25,10 @@ st.markdown("""
     <meta name="robots" content="noindex, nofollow">
 """, unsafe_allow_html=True)
 
-# 2. Session State
-if 'limit' not in st.session_state:
-    st.session_state.limit = 1000
-
-# Header
+# 2. Header
 st.header("SF Citywide: Planned Maintenance Cancellations")
 st.write("Visualizing 311 reports closed as 'Cancelled - Planned Maintenance' by Public Works.")
+st.caption("Filters: 'backfill_tree_basin' and 'empty_tree_basin' only.")
 
 # --- SUPERVISOR MAPPING ---
 supervisor_map = {
@@ -75,60 +72,80 @@ else:
 
 st.markdown("---")
 
-# 3. Query Construction
+# 3. Setup
 eighteen_months_ago = (datetime.now() - timedelta(days=548)).strftime('%Y-%m-%dT%H:%M:%S')
 base_url = "https://data.sfgov.org/resource/vw6y-z8j6.json"
 
-# --- CATEGORY INCLUSION ---
-# UPDATED: Only looking for these specific types now.
-included_details = "('backfill_tree_basin', 'empty_tree_basin')"
+# --- HELPER: ROBUST FILTERING ---
+def filter_dataframe(df):
+    """
+    Python-side filtering to guarantee accuracy.
+    Checks multiple potential column names for the request details.
+    """
+    if df.empty: return df
+    
+    # 1. Identify the 'Details' column
+    # API usually uses 'service_details', but sometimes 'request_details' or 'service_subtype'
+    possible_cols = ['service_details', 'request_details', 'service_subtype']
+    target_col = next((c for c in possible_cols if c in df.columns), None)
+    
+    if not target_col:
+        return pd.DataFrame() # Can't filter if column missing
+    
+    # 2. Convert to string and lowercase
+    df[target_col] = df[target_col].astype(str).str.lower()
+    
+    # 3. Strict Inclusion List
+    targets = ['backfill_tree_basin', 'empty_tree_basin']
+    
+    # Filter rows where the column contains either target string
+    mask = df[target_col].isin(targets)
+    return df[mask]
 
-# --- METRICS QUERY ---
-# Logic: "Total universe of relevant tickets"
-# Denominator = PW Tickets > 18mo > IN included categories
-metrics_where = (
+# 4. FETCH ALL STATS DATA (The Denominator)
+# We fetch metadata for ALL matching cases (with/without images) to get the total count.
+# We use a 'LIKE' query to be nice to the API, then strict filter in Python.
+stats_where = (
     f"closed_date > '{eighteen_months_ago}' "
     f"AND agency_responsible LIKE '%PW%' "
-    f"AND service_details IN {included_details}"
+    f"AND service_details LIKE '%tree_basin%'" # Efficient API pre-filter
 )
 
 if selected_id != "Citywide":
-    metrics_where += f" AND supervisor_district = '{selected_id}'"
+    stats_where += f" AND supervisor_district = '{selected_id}'"
 
-# 4. Fetch Metrics
 @st.cache_data(ttl=300)
-def get_metrics(where_clause):
+def get_stats_data(where_clause):
+    # Fetch enough columns to filter and count status
     params = {
-        "$select": "status_notes, count(*)",
+        "$select": "closed_date, status_notes, service_details, service_subtype",
         "$where": where_clause,
-        "$group": "status_notes"
+        "$limit": 50000 # Effectively no limit
     }
     try:
         r = requests.get(base_url, params=params)
         if r.status_code == 200:
-            return pd.DataFrame(r.json())
-        else:
-            return pd.DataFrame()
+            raw_df = pd.DataFrame(r.json())
+            return filter_dataframe(raw_df)
+        return pd.DataFrame()
     except:
         return pd.DataFrame()
 
-metrics_df = get_metrics(metrics_where)
+stats_df = get_stats_data(stats_where)
 
-# Calculate Stats
+# --- CALCULATE STATS ---
 total_records = 0
 cancelled_count = 0
 percentage = 0.0
 
-if not metrics_df.empty:
-    metrics_df['count'] = pd.to_numeric(metrics_df['count'])
+if not stats_df.empty:
+    total_records = len(stats_df)
     
-    # Total = Sum of ALL tickets matching criteria (including those without photos)
-    total_records = metrics_df['count'].sum()
-    
-    # Cancelled = Just the 'Cancelled - Planned Maintenance' subset
-    target_row = metrics_df[metrics_df['status_notes'] == 'Cancelled - Planned Maintenance']
-    if not target_row.empty:
-        cancelled_count = target_row['count'].iloc[0]
+    # Count specific cancellations
+    # Normalize status_notes just in case
+    if 'status_notes' in stats_df.columns:
+        cancelled_mask = stats_df['status_notes'].astype(str) == 'Cancelled - Planned Maintenance'
+        cancelled_count = len(stats_df[cancelled_mask])
     
     if total_records > 0:
         percentage = (cancelled_count / total_records) * 100
@@ -136,7 +153,7 @@ if not metrics_df.empty:
 st.markdown(
     f"""
     <div class='metric-text'>
-        Found <b>{total_records:,}</b> records total (within these categories).<br>
+        Found <b>{total_records:,}</b> records total (backfill/empty basin only).<br>
         <b>{cancelled_count:,}</b> were "Cancelled - Planned Maintenance" ({percentage:.1f}% of total).
     </div>
     """, 
@@ -144,32 +161,30 @@ st.markdown(
 )
 st.markdown("---")
 
-# 5. Fetch Feed Data
-# --- FEED QUERY ---
-# Logic: "Show me the photos"
-# Must be Cancelled AND have an image
-feed_where = metrics_where + " AND status_notes = 'Cancelled - Planned Maintenance' AND media_url IS NOT NULL"
-
-params = {
-    "$where": feed_where,
-    "$order": "closed_date DESC",
-    "$limit": st.session_state.limit
-}
+# 5. FETCH FEED DATA (The Images)
+# Stricter query: Must be Cancelled AND have Image
+feed_where = stats_where + " AND status_notes = 'Cancelled - Planned Maintenance' AND media_url IS NOT NULL"
 
 @st.cache_data(ttl=300)
-def get_data(query_params):
+def get_feed_data(where_clause):
+    params = {
+        "$where": where_clause,
+        "$order": "closed_date DESC",
+        "$limit": 50000 # No pagination
+    }
     try:
-        r = requests.get(base_url, params=query_params)
+        r = requests.get(base_url, params=params)
         if r.status_code == 200:
-            return pd.DataFrame(r.json())
+            raw_df = pd.DataFrame(r.json())
+            return filter_dataframe(raw_df)
         else:
-            st.error(f"API Error {r.status_code}: {r.text}")
+            st.error(f"API Error {r.status_code}")
             return pd.DataFrame()
     except Exception as e:
-        st.error(f"Connection Error: {e}")
+        st.error(f"Error: {e}")
         return pd.DataFrame()
 
-df = get_data(params)
+df = get_feed_data(feed_where)
 
 # 6. Helper: Identify Image
 def get_image_info(media_item):
@@ -186,6 +201,10 @@ if not df.empty:
     cols = st.columns(4)
     display_count = 0
     
+    # Identify the correct column for details again for display
+    possible_cols = ['service_details', 'request_details', 'service_subtype']
+    details_col = next((c for c in possible_cols if c in df.columns), 'service_details')
+
     for index, row in df.iterrows():
         full_url, is_viewable = get_image_info(row.get('media_url'))
         
@@ -205,7 +224,7 @@ if not df.empty:
                     except:
                         opened_str, closed_str, days_open = "?", "?", "?"
 
-                    details = row.get('service_details', row.get('request_details', 'N/A'))
+                    details = row.get(details_col, 'N/A')
                     status_notes = row.get('status_notes', 'Closed')
                     
                     # Link Generation
@@ -234,19 +253,11 @@ if not df.empty:
     if display_count == 0:
         st.info("Records found, but no viewable images could be extracted.")
     
-    # Load More
-    st.markdown("---")
-    c1, c2, c3 = st.columns([1, 2, 1])
-    with c2:
-        if st.button(f"Load More Records (Current Limit: {st.session_state.limit})"):
-            st.session_state.limit += 500
-            st.rerun()
-
 else:
     if selected_id != "Citywide":
         st.warning(f"No records found for Supervisor District {selected_label} matching these criteria.")
     else:
-        st.warning("No records found matching 'Cancelled - Planned Maintenance' for PW in the last 18 months.")
+        st.warning("No records found matching criteria.")
 
 # Footer
 st.markdown("---")

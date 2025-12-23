@@ -15,17 +15,17 @@ SUPERVISOR_MAP = {
     "10": "10 - Shamann Walton", "11": "11 - Chyanne Chen"
 }
 
-# --- 2. STYLING (REDUCED SPACING & UNIFORM FONTS) ---
+# --- 2. STYLING ---
 st.markdown("""
     <style>
-        /* Tighten vertical spacing between Streamlit elements */
+        /* Tighten vertical spacing */
         div[data-testid="stVerticalBlock"] > div { gap: 0.1rem; }
         
-        /* Unified font and tight line height for the card text */
+        /* Unified font for card text */
         .card-text {
             font-family: "Source Sans Pro", sans-serif;
             font-size: 0.85rem;
-            line-height: 1.25;
+            line-height: 1.3;
             color: #FAFAFA;
             margin: 0px;
         }
@@ -33,19 +33,18 @@ st.markdown("""
         /* Enforce uniform image heights */
         div[data-testid="stImage"] > img {
             object-fit: cover; 
-            height: 180px; 
+            height: 200px; 
             width: 100%;
             border-radius: 4px;
         }
         
-        /* Metrics container styling */
+        /* Metrics/Table container styling */
         .metric-container {
             background-color: #0E1117; 
             border: 1px solid #303030;
             border-radius: 5px;
-            padding: 10px;
-            text-align: center;
-            margin-bottom: 15px;
+            padding: 15px;
+            margin-bottom: 20px;
         }
     </style>
 """, unsafe_allow_html=True)
@@ -61,6 +60,7 @@ def load_data(district_id):
         "service_details, status_notes, address, media_url"
     )
     
+    # Filter: Closed, PW, Tree Basin
     where_clause = (
         f"closed_date > '{eighteen_months_ago}' "
         "AND agency_responsible LIKE '%PW%' "
@@ -99,6 +99,25 @@ def get_valid_image_url(media_item):
         return url
     return None
 
+def get_category(note):
+    """Parses the first meaningful word from the status note."""
+    if not isinstance(note, str):
+        return "Unknown"
+    
+    note = note.strip()
+    note_lower = note.lower()
+    
+    # specific handling to split 'Case' into useful buckets
+    if note_lower.startswith("case is a duplicate"):
+        return "Duplicate"
+    if note_lower.startswith("case resolved"):
+        return "Resolved"
+    if note_lower.startswith("case transferred"):
+        return "Transferred"
+        
+    # Default: take the first word (e.g., "Cancelled", "Administrative")
+    return note.split(' ')[0].title()
+
 # --- 4. MAIN APP ---
 
 def main():
@@ -126,15 +145,35 @@ def main():
         st.warning("No records found.")
         return
 
-    # Metrics
-    total_count = len(df)
-    st.markdown(f"<div class='metric-container'><span class='card-text'>Showing <b>{total_count:,}</b> completed tree basin requests.</span></div>", unsafe_allow_html=True)
+    # --- Closure Reason Statistics ---
+    # Apply category logic
+    df['closure_reason'] = df['status_notes'].apply(get_category)
+    
+    # Group and Calculate
+    stats = df['closure_reason'].value_counts().reset_index()
+    stats.columns = ['Closure Reason', 'Count']
+    stats['% of Cases'] = (stats['Count'] / len(df) * 100).map('{:.1f}%'.format)
+    
+    # Display Stats
+    st.markdown("##### Closure Reasons Summary")
+    with st.container():
+        # Using a dataframe with hidden index for a cleaner look
+        st.dataframe(
+            stats, 
+            use_container_width=True, 
+            hide_index=True,
+            column_config={
+                "Closure Reason": st.column_config.TextColumn("Reason"),
+                "Count": st.column_config.NumberColumn("Total Cases"),
+                "% of Cases": st.column_config.TextColumn("Percentage"),
+            }
+        )
+    st.markdown("---")
 
-    # Process Images
+    # --- Image Grid ---
     df['valid_image'] = df['media_url'].apply(get_valid_image_url)
     display_df = df.dropna(subset=['valid_image'])
 
-    # --- Grid Display ---
     COLS_PER_ROW = 4
     cols = st.columns(COLS_PER_ROW)
 
@@ -144,11 +183,18 @@ def main():
                 # Image
                 st.image(row['valid_image'], use_container_width=True)
                 
-                # Data Preparation
-                opened = row['requested_datetime'].strftime('%m/%d/%y') if pd.notnull(row['requested_datetime']) else "?"
-                closed = row['closed_date'].strftime('%m/%d/%y') if pd.notnull(row['closed_date']) else "?"
+                # Calculations
+                opened = row['requested_datetime']
+                closed = row['closed_date']
                 
-                # Title Case for better readability
+                opened_str = opened.strftime('%m/%d/%y') if pd.notnull(opened) else "?"
+                closed_str = closed.strftime('%m/%d/%y') if pd.notnull(closed) else "?"
+                
+                days_diff = "?"
+                if pd.notnull(opened) and pd.notnull(closed):
+                    days_diff = (closed - opened).days
+                
+                # Text Content
                 service = str(row.get('service_details', 'N/A')).replace('_', ' ').title()
                 notes = str(row.get('status_notes', 'N/A'))
                 
@@ -158,12 +204,12 @@ def main():
                 ticket_id = row['service_request_id']
                 ticket_url = f"https://mobile311.sfgov.org/tickets/{ticket_id}"
 
-                # Dense Text Block (Markdown with minimal spacing)
+                # Dense Text Block
                 st.markdown(f"""
-                    <p class="card-text"><b><a href="{map_url}" style="color: #60B4FF; text-decoration: none;">{addr}</a></b></p>
-                    <p class="card-text">{opened} ➔ {closed}</p>
+                    <p class="card-text"><b><a href="{map_url}" target="_blank" style="color: #60B4FF; text-decoration: none;">{addr}</a></b></p>
+                    <p class="card-text">{opened_str} ➔ {closed_str} ({days_diff} days)</p>
                     <p class="card-text">Type: {service}</p>
-                    <p class="card-text">Closure note: <a href="{ticket_url}" style="color: #60B4FF; text-decoration: none;">{notes}</a></p>
+                    <p class="card-text">Closure note: <a href="{ticket_url}" target="_blank" style="color: #60B4FF; text-decoration: none;">{notes}</a></p>
                 """, unsafe_allow_html=True)
 
 if __name__ == "__main__":

@@ -15,13 +15,13 @@ SUPERVISOR_MAP = {
     "10": "10 - Shamann Walton", "11": "11 - Chyanne Chen"
 }
 
-# --- 2. STYLING (For the Image Cards) ---
+# --- 2. STYLING ---
 st.markdown("""
     <style>
-        /* Remove gap between standard elements */
+        /* Compact Spacing */
         div[data-testid="stVerticalBlock"] > div { gap: 0rem; }
         
-        /* Card Text - Clean and Small */
+        /* Card Text */
         .card-text {
             font-family: "Source Sans Pro", sans-serif;
             font-size: 13px;
@@ -37,7 +37,7 @@ st.markdown("""
             margin-top: 4px;
         }
         
-        /* Image Uniformity */
+        /* Images */
         div[data-testid="stImage"] > img {
             object-fit: cover; 
             height: 180px; 
@@ -54,20 +54,22 @@ st.markdown("""
 # --- 3. HELPER FUNCTIONS ---
 
 @st.cache_data(ttl=600)
-def load_data_v4(district_id):
+def load_data_v5(district_id):
     eighteen_months_ago = (datetime.now() - timedelta(days=548)).strftime('%Y-%m-%dT%H:%M:%S')
     
     select_cols = (
         "service_request_id, requested_datetime, closed_date, "
-        "service_details, status_notes, address, media_url"
+        "service_details, status_notes, address, media_url, supervisor_district"
     )
     
+    # Filter for Tree Basin + PW + Date
     where_clause = (
         f"closed_date > '{eighteen_months_ago}' "
         "AND agency_responsible LIKE '%PW%' "
         "AND (upper(service_details) LIKE '%TREE_BASIN%')"
     )
 
+    # Server-side filter for District
     if district_id != "Citywide":
         where_clause += f" AND supervisor_district = '{district_id}'"
 
@@ -85,9 +87,9 @@ def load_data_v4(district_id):
         
         if df.empty: return pd.DataFrame()
         
-        # --- Defensive Column Creation ---
-        cols_to_check = ['status_notes', 'media_url', 'service_details', 'address']
-        for c in cols_to_check:
+        # Defensive columns
+        cols = ['status_notes', 'media_url', 'service_details', 'address', 'service_request_id']
+        for c in cols:
             if c not in df.columns: df[c] = None
 
         df['status_notes'] = df['status_notes'].astype(str)
@@ -110,27 +112,21 @@ def get_valid_image_url(media_item):
 
 def get_category(note):
     """
-    Intelligent categorization:
-    1. Lowercase and strip text.
-    2. Handle specific 311 phrases (Duplicate, Transferred).
-    3. Remove 'Case ' prefix to merge 'Case Resolved' with 'Resolved'.
-    4. Return the first word.
+    Parses status notes into clean categories.
     """
-    if not isinstance(note, str) or note.lower() == 'nan' or note == 'None': 
-        return "Unknown"
-    
+    if not isinstance(note, str) or note.lower() == 'nan': return "Unknown"
     clean = note.strip().lower()
     
-    # Specific overrides based on your feedback
+    # Specific Keyword Matches
     if "duplicate" in clean: return "Duplicate"
     if "insufficient info" in clean: return "Insufficient Info"
     if "transferred" in clean: return "Transferred"
+    if "administrative" in clean: return "Administrative Closure"
     
-    # Strip "case " prefix if present (e.g. "case resolved" -> "resolved")
-    if clean.startswith("case "):
-        clean = clean[5:].strip()
+    # Strip prefixes like "Case "
+    if clean.startswith("case "): clean = clean[5:].strip()
         
-    # Return first word (Title Case)
+    # Default to first word (e.g., "Resolved", "Cancelled")
     return clean.split(' ')[0].title()
 
 # --- 4. MAIN APP ---
@@ -156,43 +152,51 @@ def main():
     st.query_params["district"] = selected_id
 
     # --- Load Data ---
-    df = load_data_v4(selected_id)
+    df = load_data_v5(selected_id)
 
     if df.empty:
-        st.warning("No records found.")
+        st.warning("No records found for this district.")
         return
 
-    # --- 1. STATS TABLE (Modern & Native) ---
-    # Apply category logic
-    df['closure_reason'] = df['status_notes'].apply(get_category)
+    # --- 1. STATS TABLE (UNIQUE CASES ONLY) ---
+    # Fix: Drop duplicates based on Ticket ID so multi-photo tickets don't skew the %
+    unique_cases_df = df.drop_duplicates(subset=['service_request_id'])
     
-    # Create Summary Dataframe
-    stats = df['closure_reason'].value_counts().reset_index()
+    # Apply category logic to the unique cases
+    unique_cases_df['closure_reason'] = unique_cases_df['status_notes'].apply(get_category)
+    
+    # Calculate Stats
+    stats = unique_cases_df['closure_reason'].value_counts().reset_index()
     stats.columns = ['Closure Reason', 'Count']
-    stats['Percentage'] = stats['Count'] / len(df) # Keep as float for progress bar
     
-    # Display using Native Dataframe with Visuals
-    st.markdown("##### Closure Reasons Summary")
+    # The denominator is now strictly the number of unique tickets in this district
+    district_total_cases = len(unique_cases_df)
+    stats['Percentage'] = stats['Count'] / district_total_cases
+
+    # Display Table
+    st.markdown(f"##### Closure Reasons ({selected_label})")
+    st.caption(f"Based on {district_total_cases:,} unique tickets.")
+    
     st.dataframe(
         stats,
-        use_container_width=False, # Keeps it compact, not full width
-        width=700, # Fixed readable width
+        use_container_width=False,
+        width=700,
         hide_index=True,
         column_config={
             "Closure Reason": st.column_config.TextColumn("Reason", width="medium"),
             "Count": st.column_config.NumberColumn("Cases", format="%d"),
             "Percentage": st.column_config.ProgressColumn(
-                "Share of Total",
+                "Share of District",
                 format="%.1f%%",
                 min_value=0,
                 max_value=1,
             ),
         }
     )
-    
     st.markdown("---")
 
-    # --- 2. IMAGE FEED LOGIC ---
+    # --- 2. IMAGE GRID LOGIC (Full Data for Photos) ---
+    # We go back to 'df' (which has rows for every photo) to build the gallery
     df['valid_image'] = df['media_url'].apply(get_valid_image_url)
     display_df = df.dropna(subset=['valid_image'])
     
@@ -204,10 +208,8 @@ def main():
     
     image_count = len(display_df)
 
-    # Display Count Header
     st.markdown(f"#### 📸 Showing {image_count} cases with images")
 
-    # --- 3. IMAGE GRID RENDER ---
     if display_df.empty:
         st.info("No unique images found (duplicates hidden).")
         return
@@ -218,10 +220,8 @@ def main():
     for i, (index, row) in enumerate(display_df.iterrows()):
         with cols[i % COLS_PER_ROW]:
             with st.container(border=True):
-                # Image
                 st.image(row['valid_image'], use_container_width=True)
                 
-                # Metadata
                 opened = row['requested_datetime']
                 closed = row['closed_date']
                 

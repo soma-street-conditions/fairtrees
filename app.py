@@ -36,12 +36,12 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# --- 3. THE "HEIST" FUNCTION ---
-# Renamed to v2 to FORCE CACHE RESET
+# --- 3. THE "HEIST" FUNCTION (User Provided V2) ---
 @st.cache_data(ttl=3600, show_spinner=False)
 def fetch_verint_image_v2(wrapper_url):
     """
-    Downloads and decodes a protected image from the SF 311 Verint system.
+    Production-ready Verint image fetcher.
+    Applies the "Heist" logic: URL Sync -> Handshake -> Nested Payload -> Map Filter -> JSON Unwrap.
     """
     if not isinstance(wrapper_url, str) or "verint" not in wrapper_url:
         return None
@@ -53,18 +53,17 @@ def fetch_verint_image_v2(wrapper_url):
             "Referer": "https://mobile311.sfgov.org/",
         }
 
-        # STEP 1: SYNC ID
+        # 1. SYNC ID (Crucial: Use ID from URL, not dataframe)
         parsed = urlparse(wrapper_url)
         qs = parse_qs(parsed.query)
         url_case_id = qs.get('caseid', [None])[0]
         if not url_case_id: return None
 
-        # STEP 2: SESSION
-        r_page = session.get(wrapper_url, headers=headers, timeout=6) # Increased timeout
+        # 2. VISIT PAGE & GET SECRETS
+        r_page = session.get(wrapper_url, headers=headers, timeout=5)
         if r_page.status_code != 200: return None
         html = r_page.text
 
-        # STEP 3: KEYS
         formref_match = re.search(r'"formref"\s*:\s*"([^"]+)"', html)
         if not formref_match: return None
         formref = formref_match.group(1)
@@ -72,19 +71,19 @@ def fetch_verint_image_v2(wrapper_url):
         csrf_match = re.search(r'name="_csrf_token"\s+content="([^"]+)"', html)
         csrf_token = csrf_match.group(1) if csrf_match else None
 
-        # STEP 4: HANDSHAKE
+        # 3. HANDSHAKE (Authorize Session)
         try:
             citizen_url = "https://sanfrancisco.form.us.empro.verintcloudservices.com/api/citizen?archived=Y&preview=false&locale=en"
             headers["Referer"] = r_page.url
             headers["Origin"] = "https://sanfrancisco.form.us.empro.verintcloudservices.com"
             if csrf_token: headers["X-CSRF-TOKEN"] = csrf_token
             
-            r_handshake = session.get(citizen_url, headers=headers, timeout=6)
+            r_handshake = session.get(citizen_url, headers=headers, timeout=5)
             if 'Authorization' in r_handshake.headers:
                 headers["Authorization"] = r_handshake.headers['Authorization']
         except: pass
 
-        # STEP 5: LIST FILES
+        # 4. GET FILE LIST (Using the winning "Nested" payload)
         api_base = "https://sanfrancisco.form.us.empro.verintcloudservices.com/api/custom"
         headers["Content-Type"] = "application/json"
         
@@ -96,7 +95,7 @@ def fetch_verint_image_v2(wrapper_url):
         
         r_list = session.post(
             f"{api_base}?action=get_attachments_details&actionedby=&loadform=true&access=citizen&locale=en",
-            json=nested_payload, headers=headers, timeout=6
+            json=nested_payload, headers=headers, timeout=5
         )
         
         if r_list.status_code != 200: return None
@@ -109,32 +108,35 @@ def fetch_verint_image_v2(wrapper_url):
         if not filename_str: return None
         raw_files = filename_str.split(';')
 
-        # STEP 6: FIND TARGET
+        # 5. FILTER MAPS (Crucial: Ignores _map.jpg and m.jpg)
         target_filename = None
         for fname in raw_files:
             fname = fname.strip()
             if not fname: continue
             
             f_lower = fname.lower()
+            # Skip ANY file that looks like a map
             if f_lower.endswith('m.jpg') or f_lower.endswith('_map.jpg') or f_lower.endswith('_map.jpeg'):
                 continue
+                
             if f_lower.endswith(('.jpg', '.jpeg', '.png')):
                 target_filename = fname
                 break
         
         if not target_filename: return None
 
-        # STEP 7: DOWNLOAD
+        # 6. DOWNLOAD & UNWRAP (Crucial: Handles Base64 JSON response)
         download_payload = nested_payload.copy()
         download_payload["data"]["filename"] = target_filename
         
         r_image = session.post(
             f"{api_base}?action=download_attachment&actionedby=&loadform=true&access=citizen&locale=en",
-            json=download_payload, headers=headers, timeout=10 # Higher timeout for download
+            json=download_payload, headers=headers, timeout=10
         )
         
         if r_image.status_code == 200:
             try:
+                # The server returns JSON with a 'txt_file' field containing Base64 data
                 response_json = r_image.json()
                 if 'data' in response_json and 'txt_file' in response_json['data']:
                     b64_data = response_json['data']['txt_file']
@@ -143,7 +145,9 @@ def fetch_verint_image_v2(wrapper_url):
             except:
                 return None
             
-    except Exception: return None
+    except Exception:
+        return None
+        
     return None
 
 # --- 4. DATA LOADING ---
@@ -262,42 +266,37 @@ def main():
     cols = st.columns(COLS_PER_ROW)
 
     for i, (index, row) in enumerate(subset_df.iterrows()):
-        # Prep Metadata First
-        opened = row['requested_datetime']
-        closed = row['closed_date']
-        opened_str = opened.strftime('%m/%d/%y') if pd.notnull(opened) else "?"
-        closed_str = closed.strftime('%m/%d/%y') if pd.notnull(closed) else "?"
-        days_diff = (closed - opened).days if (pd.notnull(opened) and pd.notnull(closed)) else "?"
-        
-        service = str(row['service_details']).replace('_', ' ').title()
-        notes = str(row['status_notes'])
-        addr = str(row['address']).split(',')[0]
-        map_url = f"https://www.google.com/maps/search/?api=1&query={addr.replace(' ', '+')}+San+Francisco"
-        ticket_url = f"https://mobile311.sfgov.org/tickets/{row['service_request_id']}"
-
-        # Resolve Image
         raw_url = row['media_url']
         final_image = None
         
+        # Determine Image Source
         if isinstance(raw_url, str) and raw_url.lower().endswith(('.jpg', '.jpeg', '.png', '.webp')):
             final_image = raw_url
         elif isinstance(raw_url, str) and "verintcloudservices" in raw_url:
-            # Use V2 function to clear bad cache
+            # Use the CORRECTED V2 function
             final_image = fetch_verint_image_v2(raw_url)
         
         with cols[i % COLS_PER_ROW]:
             with st.container(border=True):
-                # RENDER EITHER IMAGE OR ERROR PLACEHOLDER
+                # Render Image or Fallback
                 if final_image:
                     st.image(final_image, width="stretch")
                 else:
-                    # Explicit Error Card so you know logic failed vs just empty
-                    st.markdown("""
-                        <div class="error-card">
-                            ⚠️ Image Unavailable
-                        </div>
-                    """, unsafe_allow_html=True)
+                    st.markdown("""<div class="error-card">⚠️ Image Unavailable</div>""", unsafe_allow_html=True)
+                    
+                # Metadata
+                opened = row['requested_datetime']
+                closed = row['closed_date']
+                opened_str = opened.strftime('%m/%d/%y') if pd.notnull(opened) else "?"
+                closed_str = closed.strftime('%m/%d/%y') if pd.notnull(closed) else "?"
+                days_diff = (closed - opened).days if (pd.notnull(opened) and pd.notnull(closed)) else "?"
                 
+                service = str(row['service_details']).replace('_', ' ').title()
+                notes = str(row['status_notes'])
+                addr = str(row['address']).split(',')[0]
+                map_url = f"https://www.google.com/maps/search/?api=1&query={addr.replace(' ', '+')}+San+Francisco"
+                ticket_url = f"https://mobile311.sfgov.org/tickets/{row['service_request_id']}"
+
                 st.markdown(f"""
                     <p class="card-text"><b><a href="{map_url}" target="_blank">{addr}</a></b></p>
                     <p class="card-text" style="color: #9E9E9E;">{opened_str} ➔ {closed_str} ({days_diff} days)</p>

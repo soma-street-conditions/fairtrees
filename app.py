@@ -3,6 +3,7 @@ import pandas as pd
 import requests
 import re
 import base64
+import io
 from urllib.parse import urlparse, parse_qs
 from datetime import datetime, timedelta
 
@@ -18,30 +19,44 @@ SUPERVISOR_MAP = {
     "10": "10 - Shamann Walton", "11": "11 - Chyanne Chen"
 }
 
-# --- 2. STYLING ---
+# --- 2. STYLING & HEADER ---
 st.markdown("""
     <style>
         div[data-testid="stVerticalBlock"] > div { gap: 0rem; }
-        .card-text { font-family: "Source Sans Pro", sans-serif; font-size: 13px; line-height: 1.4; color: #E0E0E0; margin: 0px; }
-        .note-text { font-family: "Source Sans Pro", sans-serif; font-size: 11px; line-height: 1.2; color: #9E9E9E; margin-top: 4px; }
-        .error-card {
-            height: 180px; width: 100%; border-radius: 4px;
-            background-color: #262730; border: 1px dashed #FF4B4B;
-            display: flex; align-items: center; justify-content: center;
-            color: #FF4B4B; font-size: 12px; font-weight: bold;
+        
+        .card-text {
+            font-family: "Source Sans Pro", sans-serif;
+            font-size: 13px;
+            line-height: 1.4;
+            color: #E0E0E0;
+            margin: 0px;
         }
-        div[data-testid="stImage"] > img { object-fit: cover; height: 180px; width: 100%; border-radius: 4px; }
+        .note-text {
+            font-family: "Source Sans Pro", sans-serif;
+            font-size: 11px;
+            line-height: 1.2;
+            color: #9E9E9E;
+            margin-top: 4px;
+        }
+        
+        div[data-testid="stImage"] > img {
+            object-fit: cover; 
+            height: 180px; 
+            width: 100%;
+            border-radius: 4px;
+        }
+        
         a { color: #58A6FF; text-decoration: none; }
         a:hover { text-decoration: underline; }
     </style>
 """, unsafe_allow_html=True)
 
-# --- 3. THE "HEIST" FUNCTION (Your Exact Solution) ---
+# --- 3. THE "HEIST" FUNCTION ---
 @st.cache_data(ttl=3600, show_spinner=False)
 def fetch_verint_image_v3(wrapper_url):
     """
     Downloads and decodes a protected image from the SF 311 Verint system.
-    Includes explicit Map Filtering and JSON Base64 Unwrapping.
+    Returns RAW BYTES if successful, or None if failed.
     """
     if not isinstance(wrapper_url, str) or "verint" not in wrapper_url:
         return None
@@ -49,23 +64,21 @@ def fetch_verint_image_v3(wrapper_url):
     try:
         session = requests.Session()
         headers = {
-            # User-Agent is critical. Server rejects Python-requests default agent.
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
             "Referer": "https://mobile311.sfgov.org/",
         }
 
-        # --- STEP 1: SYNC ID ---
+        # 1. SYNC ID
         parsed = urlparse(wrapper_url)
         qs = parse_qs(parsed.query)
         url_case_id = qs.get('caseid', [None])[0]
         if not url_case_id: return None
 
-        # --- STEP 2: ESTABLISH SESSION ---
+        # 2. VISIT PAGE
         r_page = session.get(wrapper_url, headers=headers, timeout=5)
         if r_page.status_code != 200: return None
         html = r_page.text
 
-        # --- STEP 3: EXTRACT KEYS ---
         formref_match = re.search(r'"formref"\s*:\s*"([^"]+)"', html)
         if not formref_match: return None
         formref = formref_match.group(1)
@@ -73,7 +86,7 @@ def fetch_verint_image_v3(wrapper_url):
         csrf_match = re.search(r'name="_csrf_token"\s+content="([^"]+)"', html)
         csrf_token = csrf_match.group(1) if csrf_match else None
 
-        # --- STEP 4: API HANDSHAKE ---
+        # 3. HANDSHAKE
         try:
             citizen_url = "https://sanfrancisco.form.us.empro.verintcloudservices.com/api/citizen?archived=Y&preview=false&locale=en"
             headers["Referer"] = r_page.url
@@ -81,12 +94,11 @@ def fetch_verint_image_v3(wrapper_url):
             if csrf_token: headers["X-CSRF-TOKEN"] = csrf_token
             
             r_handshake = session.get(citizen_url, headers=headers, timeout=5)
-            
             if 'Authorization' in r_handshake.headers:
                 headers["Authorization"] = r_handshake.headers['Authorization']
         except: pass
 
-        # --- STEP 5: REQUEST FILE LIST ---
+        # 4. LIST FILES
         api_base = "https://sanfrancisco.form.us.empro.verintcloudservices.com/api/custom"
         headers["Content-Type"] = "application/json"
         
@@ -111,43 +123,37 @@ def fetch_verint_image_v3(wrapper_url):
         if not filename_str: return None
         raw_files = filename_str.split(';')
 
-        # --- STEP 6: FILTER & DOWNLOAD ---
+        # 5. FILTER MAPS
         target_filename = None
         for fname in raw_files:
             fname = fname.strip()
             if not fname: continue
             
-            # FILTER: Ignore system-generated maps to find the user photo.
             f_lower = fname.lower()
             if f_lower.endswith('m.jpg') or f_lower.endswith('_map.jpg') or f_lower.endswith('_map.jpeg'):
                 continue
-                
             if f_lower.endswith(('.jpg', '.jpeg', '.png')):
                 target_filename = fname
                 break
         
         if not target_filename: return None
 
-        # Download the specific file
+        # 6. DOWNLOAD
         download_payload = nested_payload.copy()
         download_payload["data"]["filename"] = target_filename
         
         r_image = session.post(
             f"{api_base}?action=download_attachment&actionedby=&loadform=true&access=citizen&locale=en",
-            json=download_payload, headers=headers, timeout=10
+            json=download_payload, headers=headers, timeout=8
         )
         
         if r_image.status_code == 200:
             try:
-                # --- STEP 7: JSON UNWRAP ---
-                # The server returns JSON with a Base64 string, NOT raw bytes.
+                # 7. UNWRAP JSON
                 response_json = r_image.json()
                 if 'data' in response_json and 'txt_file' in response_json['data']:
                     b64_data = response_json['data']['txt_file']
-                    
-                    # Remove header if present (e.g. "data:image/jpeg;base64,...")
                     if "," in b64_data: b64_data = b64_data.split(",")[1]
-                    
                     return base64.b64decode(b64_data)
             except:
                 return None
@@ -272,21 +278,23 @@ def main():
 
     for i, (index, row) in enumerate(subset_df.iterrows()):
         raw_url = row['media_url']
-        final_image = None
         
-        # Determine Image Source
-        if isinstance(raw_url, str) and raw_url.lower().endswith(('.jpg', '.jpeg', '.png', '.webp')):
-            final_image = raw_url
-        elif isinstance(raw_url, str) and "verintcloudservices" in raw_url:
-            # Use V3 function with correct unwrap logic
-            final_image = fetch_verint_image_v3(raw_url)
+        # DEFAULT: Use the raw URL. If it's a standard JPG, this works. 
+        # If it's Verint and the fetch fails, this will break (which is what you want).
+        image_source = raw_url 
+        
+        # VERINT HANDLER
+        if isinstance(raw_url, str) and "verintcloudservices" in raw_url:
+            decoded_bytes = fetch_verint_image_v3(raw_url)
+            if decoded_bytes:
+                # If successful, swap the source to the bytes
+                image_source = decoded_bytes
         
         with cols[i % COLS_PER_ROW]:
             with st.container(border=True):
-                if final_image:
-                    st.image(final_image, width="stretch")
-                else:
-                    st.markdown("""<div class="error-card">⚠️ Image Unavailable</div>""", unsafe_allow_html=True)
+                # Render whatever we have. If it's a broken URL, st.image shows broken icon.
+                # If it's bytes, it shows the image.
+                st.image(image_source, width="stretch")
                     
                 opened = row['requested_datetime']
                 closed = row['closed_date']

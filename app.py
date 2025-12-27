@@ -1,13 +1,15 @@
 import streamlit as st
 import pandas as pd
 import requests
+import re
+import base64
+from urllib.parse import urlparse, parse_qs
 from datetime import datetime, timedelta
 
 # --- 1. CONFIGURATION ---
 st.set_page_config(page_title="SF Tree Basin Maintenance", page_icon="🌳", layout="wide")
 
 API_URL = "https://data.sfgov.org/resource/vw6y-z8j6.json"
-OPEN311_URL = "https://mobile311.sfgov.org/open311/v2/requests.json"
 
 SUPERVISOR_MAP = {
     "1": "1 - Connie Chan", "2": "2 - Stephen Sherrill", "3": "3 - Danny Sauter",
@@ -20,60 +22,139 @@ SUPERVISOR_MAP = {
 st.markdown("""
     <style>
         div[data-testid="stVerticalBlock"] > div { gap: 0rem; }
-        
-        .card-text {
-            font-family: "Source Sans Pro", sans-serif;
-            font-size: 13px;
-            line-height: 1.4;
-            color: #E0E0E0;
-            margin: 0px;
-        }
-        .note-text {
-            font-family: "Source Sans Pro", sans-serif;
-            font-size: 11px;
-            line-height: 1.2;
-            color: #9E9E9E;
-            margin-top: 4px;
-        }
-        
-        div[data-testid="stImage"] > img {
-            object-fit: cover; 
-            height: 180px; 
-            width: 100%;
-            border-radius: 4px;
-        }
-        
+        .card-text { font-family: "Source Sans Pro", sans-serif; font-size: 13px; line-height: 1.4; color: #E0E0E0; margin: 0px; }
+        .note-text { font-family: "Source Sans Pro", sans-serif; font-size: 11px; line-height: 1.2; color: #9E9E9E; margin-top: 4px; }
+        div[data-testid="stImage"] > img { object-fit: cover; height: 180px; width: 100%; border-radius: 4px; }
         a { color: #58A6FF; text-decoration: none; }
         a:hover { text-decoration: underline; }
     </style>
 """, unsafe_allow_html=True)
 
-# --- 3. HELPER FUNCTIONS ---
+# --- 3. THE "HEIST" FUNCTION (Your Solution) ---
+@st.cache_data(ttl=3600, show_spinner=False)
+def fetch_verint_image(wrapper_url):
+    """
+    Downloads and decodes a protected image from the SF 311 Verint system
+    by mimicking a legitimate browser session handshake.
+    """
+    # Quick sanity check
+    if not isinstance(wrapper_url, str) or "verint" not in wrapper_url:
+        return None
 
+    try:
+        session = requests.Session()
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+            "Referer": "https://mobile311.sfgov.org/",
+        }
+
+        # --- STEP 1: SYNC ID ---
+        parsed = urlparse(wrapper_url)
+        qs = parse_qs(parsed.query)
+        url_case_id = qs.get('caseid', [None])[0]
+        if not url_case_id: return None
+
+        # --- STEP 2: ESTABLISH SESSION ---
+        r_page = session.get(wrapper_url, headers=headers, timeout=5)
+        if r_page.status_code != 200: return None
+        html = r_page.text
+
+        # --- STEP 3: EXTRACT KEYS ---
+        formref_match = re.search(r'"formref"\s*:\s*"([^"]+)"', html)
+        if not formref_match: return None
+        formref = formref_match.group(1)
+        
+        csrf_match = re.search(r'name="_csrf_token"\s+content="([^"]+)"', html)
+        csrf_token = csrf_match.group(1) if csrf_match else None
+
+        # --- STEP 4: API HANDSHAKE ---
+        try:
+            citizen_url = "https://sanfrancisco.form.us.empro.verintcloudservices.com/api/citizen?archived=Y&preview=false&locale=en"
+            headers["Referer"] = r_page.url
+            headers["Origin"] = "https://sanfrancisco.form.us.empro.verintcloudservices.com"
+            if csrf_token: headers["X-CSRF-TOKEN"] = csrf_token
+            
+            r_handshake = session.get(citizen_url, headers=headers, timeout=5)
+            if 'Authorization' in r_handshake.headers:
+                headers["Authorization"] = r_handshake.headers['Authorization']
+        except: pass
+
+        # --- STEP 5: REQUEST FILE LIST ---
+        api_base = "https://sanfrancisco.form.us.empro.verintcloudservices.com/api/custom"
+        headers["Content-Type"] = "application/json"
+        
+        nested_payload = {
+            "data": {"caseid": str(url_case_id), "formref": formref},
+            "name": "download_attachments",
+            "email": "", "xref": "", "xref1": "", "xref2": ""
+        }
+        
+        r_list = session.post(
+            f"{api_base}?action=get_attachments_details&actionedby=&loadform=true&access=citizen&locale=en",
+            json=nested_payload, headers=headers, timeout=5
+        )
+        
+        if r_list.status_code != 200: return None
+        
+        files_data = r_list.json()
+        filename_str = ""
+        if 'data' in files_data and 'formdata_filenames' in files_data['data']:
+            filename_str = files_data['data']['formdata_filenames']
+            
+        if not filename_str: return None
+        raw_files = filename_str.split(';')
+
+        # --- STEP 6: FILTER & DOWNLOAD ---
+        target_filename = None
+        for fname in raw_files:
+            fname = fname.strip()
+            if not fname: continue
+            
+            # FILTER: Ignore system-generated maps
+            f_lower = fname.lower()
+            if f_lower.endswith('m.jpg') or f_lower.endswith('_map.jpg') or f_lower.endswith('_map.jpeg'):
+                continue
+                
+            if f_lower.endswith(('.jpg', '.jpeg', '.png')):
+                target_filename = fname
+                break
+        
+        if not target_filename: return None
+
+        download_payload = nested_payload.copy()
+        download_payload["data"]["filename"] = target_filename
+        
+        r_image = session.post(
+            f"{api_base}?action=download_attachment&actionedby=&loadform=true&access=citizen&locale=en",
+            json=download_payload, headers=headers, timeout=8
+        )
+        
+        if r_image.status_code == 200:
+            try:
+                # --- STEP 7: JSON UNWRAP ---
+                response_json = r_image.json()
+                if 'data' in response_json and 'txt_file' in response_json['data']:
+                    b64_data = response_json['data']['txt_file']
+                    if "," in b64_data: b64_data = b64_data.split(",")[1]
+                    return base64.b64decode(b64_data)
+            except:
+                return None
+            
+    except Exception: return None
+    return None
+
+# --- 4. DATA LOADING (Standard Socrata) ---
 @st.cache_data(ttl=600)
-def load_data_v9(district_id):
+def load_data_v13(district_id):
     eighteen_months_ago = (datetime.now() - timedelta(days=548)).strftime('%Y-%m-%dT%H:%M:%S')
     
-    select_cols = (
-        "service_request_id, requested_datetime, closed_date, "
-        "service_details, status_notes, address, media_url, supervisor_district"
-    )
-    
-    where_clause = (
-        f"closed_date > '{eighteen_months_ago}' "
-        "AND agency_responsible LIKE '%PW%' "
-        "AND (upper(service_details) LIKE '%TREE_BASIN%')"
-    )
+    select_cols = "service_request_id, requested_datetime, closed_date, service_details, status_notes, address, media_url, supervisor_district"
+    where_clause = f"closed_date > '{eighteen_months_ago}' AND agency_responsible LIKE '%PW%' AND (upper(service_details) LIKE '%TREE_BASIN%')"
 
     if district_id != "Citywide":
         where_clause += f" AND supervisor_district = '{district_id}'"
 
-    params = {
-        "$select": select_cols,
-        "$where": where_clause,
-        "$limit": 5000,
-        "$order": "closed_date DESC"
-    }
+    params = {"$select": select_cols, "$where": where_clause, "$limit": 5000, "$order": "closed_date DESC"}
 
     try:
         r = requests.get(API_URL, params=params)
@@ -89,94 +170,22 @@ def load_data_v9(district_id):
         df['status_notes'] = df['status_notes'].astype(str)
         df['requested_datetime'] = pd.to_datetime(df['requested_datetime'], errors='coerce')
         df['closed_date'] = pd.to_datetime(df['closed_date'], errors='coerce')
-        
         return df
     except Exception as e:
         st.error(f"Data Error: {e}")
         return pd.DataFrame()
 
-def get_valid_image_url(media_item):
-    """
-    Validates URL. Allows Verint URLs to pass so they can be fixed.
-    """
-    if not media_item: return None
-    url = media_item.get('url') if isinstance(media_item, dict) else media_item
-    if not isinstance(url, str): return None
-    
-    clean_url = url.split('?')[0].lower()
-    
-    if clean_url.endswith(('.jpg', '.jpeg', '.png', '.webp')):
-        return url
-        
-    if "verintcloudservices" in clean_url:
-        return url
-        
-    return None
-
-@st.cache_data(ttl=3600, show_spinner=False)
-def fix_verint_url(ticket_id, original_url):
-    """
-    Resolves broken Verint links by querying Open311.
-    PRIORITIZES:
-    1. The last image in 'extended_attributes' (usually the user photo).
-    2. Any image in 'extended_attributes'.
-    3. The main 'media_url' (if it's not a composite stitch).
-    """
-    # If it's already a good Cloudinary link, just keep it
-    if "verintcloudservices" not in str(original_url):
-        return original_url
-
-    try:
-        params = {"service_request_id": ticket_id, "extensions": "true"}
-        r = requests.get(OPEN311_URL, params=params, timeout=3)
-        data = r.json()
-        
-        if data and len(data) > 0:
-            item = data[0]
-            
-            # --- STRATEGY A: Check extended attributes for multiple photos ---
-            ext_attrs = item.get('extended_attributes', {})
-            photos = ext_attrs.get('photos', [])
-            
-            if photos:
-                # 1. Try to find the LAST photo (usually the real one, not the map)
-                # We iterate backwards
-                for p in reversed(photos):
-                    p_url = p.get('media_url', '')
-                    # Simple filter: skip if it explicitly says "map" (just in case)
-                    if "cloudinary" in p_url and "_map" not in p_url:
-                        return p_url
-                
-                # 2. If all else fails, just take the last one available
-                return photos[-1].get('media_url')
-
-            # --- STRATEGY B: Fallback to main media_url ---
-            # But be careful of the "composite" images that start with complex transforms
-            primary_url = item.get('media_url')
-            if primary_url and "cloudinary" in primary_url:
-                # If it's one of those weird "c_limit,h_748..." stitched URLs, we might want to avoid it
-                # But if it's the only thing we have, we take it.
-                return primary_url
-                    
-    except:
-        pass
-    
-    return original_url
-
 def get_category(note):
     if not isinstance(note, str) or note.lower() == 'nan': return "Unknown"
     clean = note.strip().lower()
-    
     if "duplicate" in clean: return "Duplicate"
     if "insufficient info" in clean: return "Insufficient Info"
     if "transferred" in clean: return "Transferred"
     if "administrative" in clean: return "Administrative Closure"
-    
     if clean.startswith("case "): clean = clean[5:].strip()
-        
     return clean.split(' ')[0].title()
 
-# --- 4. MAIN APP ---
+# --- 5. MAIN APP ---
 
 def main():
     st.header("SF Tree Basin Maintenance Tracker")
@@ -199,7 +208,7 @@ def main():
     st.query_params["district"] = selected_id
 
     # --- Load Data ---
-    df = load_data_v9(selected_id)
+    df = load_data_v13(selected_id)
 
     if df.empty:
         st.warning(f"No records found for {selected_label}.")
@@ -211,87 +220,87 @@ def main():
     
     if unique_count > 0:
         unique_cases_df['closure_reason'] = unique_cases_df['status_notes'].apply(get_category)
-        
         stats = unique_cases_df['closure_reason'].value_counts().reset_index()
         stats.columns = ['Closure Reason', 'Count']
         stats['Percentage'] = (stats['Count'] / unique_count) * 100
 
         st.markdown(f"##### Closure Reasons ({selected_label})")
         st.caption(f"Denominator: {unique_count:,} unique tickets.")
-        
         st.dataframe(
-            stats,
-            use_container_width=False,
-            width=700,
-            hide_index=True,
+            stats, use_container_width=False, width=700, hide_index=True,
             column_config={
                 "Closure Reason": st.column_config.TextColumn("Reason", width="medium"),
                 "Count": st.column_config.NumberColumn("Cases", format="%d"),
-                "Percentage": st.column_config.ProgressColumn(
-                    "Share",
-                    format="%.1f%%",
-                    min_value=0,
-                    max_value=100,
-                ),
+                "Percentage": st.column_config.ProgressColumn("Share", format="%.1f%%", min_value=0, max_value=100),
             }
         )
-    else:
-        st.info("No stats available.")
-
+    
     st.markdown("---")
 
     # --- 2. IMAGE GALLERY ---
-    df['valid_image'] = df['media_url'].apply(get_valid_image_url)
-    display_df = df.dropna(subset=['valid_image'])
     
-    # Filter A: Remove "Duplicate" status
+    # A. Base Filters
+    display_df = df.dropna(subset=['media_url'])
     display_df = display_df[~display_df['status_notes'].str.contains("duplicate", case=False, na=False)]
     
-    # Filter B: Deduplicate images
-    display_df = display_df.drop_duplicates(subset=['valid_image'])
+    # B. Deduplicate by media URL
+    display_df = display_df.drop_duplicates(subset=['media_url'])
     
-    image_count = len(display_df)
-
-    st.markdown(f"#### 📸 Showing {image_count} cases with images")
-
     if display_df.empty:
         st.info("No images found.")
         return
 
+    # To prevent hitting the Verint server too hard on initial load,
+    # we take the most recent 100 images.
+    subset_df = display_df.head(100)
+    
+    image_count = len(subset_df)
+    st.markdown(f"#### 📸 Showing {image_count} recent cases with images")
+
     COLS_PER_ROW = 4
     cols = st.columns(COLS_PER_ROW)
 
-    for i, (index, row) in enumerate(display_df.iterrows()):
-        tile = cols[i % COLS_PER_ROW]
-        with tile:
-            with st.container(border=True):
-                # FIX VERINT URL
-                raw_url = row['valid_image']
-                ticket_id = row['service_request_id']
-                final_image_url = fix_verint_url(ticket_id, raw_url)
-                
-                st.image(final_image_url, use_container_width=True)
-                
-                opened = row['requested_datetime']
-                closed = row['closed_date']
-                
-                opened_str = opened.strftime('%m/%d/%y') if pd.notnull(opened) else "?"
-                closed_str = closed.strftime('%m/%d/%y') if pd.notnull(closed) else "?"
-                days_diff = (closed - opened).days if (pd.notnull(opened) and pd.notnull(closed)) else "?"
-                
-                service = str(row['service_details']).replace('_', ' ').title()
-                notes = str(row['status_notes'])
-                
-                addr = str(row['address']).split(',')[0]
-                map_url = f"https://www.google.com/maps/search/?api=1&query={addr.replace(' ', '+')}+San+Francisco"
-                ticket_url = f"https://mobile311.sfgov.org/tickets/{ticket_id}"
+    # C. Render Loop
+    for i, (index, row) in enumerate(subset_df.iterrows()):
+        raw_url = row['media_url']
+        
+        # --- IMAGE RESOLUTION LOGIC ---
+        final_image = None
+        
+        # Case 1: Standard Image (e.g. Imgur, old Cloudinary)
+        if isinstance(raw_url, str) and raw_url.lower().endswith(('.jpg', '.jpeg', '.png', '.webp')):
+            final_image = raw_url
+            
+        # Case 2: Protected Verint Link (THE HEIST)
+        elif isinstance(raw_url, str) and "verintcloudservices" in raw_url:
+            # We call the cracker function. 
+            # If it works, it returns BYTES. If it fails, it returns None.
+            final_image = fetch_verint_image(raw_url)
+        
+        # If we have a valid image (URL string OR Bytes), render the card
+        if final_image:
+            with cols[i % COLS_PER_ROW]:
+                with st.container(border=True):
+                    st.image(final_image, use_container_width=True)
+                    
+                    opened = row['requested_datetime']
+                    closed = row['closed_date']
+                    opened_str = opened.strftime('%m/%d/%y') if pd.notnull(opened) else "?"
+                    closed_str = closed.strftime('%m/%d/%y') if pd.notnull(closed) else "?"
+                    days_diff = (closed - opened).days if (pd.notnull(opened) and pd.notnull(closed)) else "?"
+                    
+                    service = str(row['service_details']).replace('_', ' ').title()
+                    notes = str(row['status_notes'])
+                    addr = str(row['address']).split(',')[0]
+                    map_url = f"https://www.google.com/maps/search/?api=1&query={addr.replace(' ', '+')}+San+Francisco"
+                    ticket_url = f"https://mobile311.sfgov.org/tickets/{row['service_request_id']}"
 
-                st.markdown(f"""
-                    <p class="card-text"><b><a href="{map_url}" target="_blank">{addr}</a></b></p>
-                    <p class="card-text" style="color: #9E9E9E;">{opened_str} ➔ {closed_str} ({days_diff} days)</p>
-                    <p class="card-text">{service}</p>
-                    <p class="note-text">Note: <a href="{ticket_url}" target="_blank">{notes}</a></p>
-                """, unsafe_allow_html=True)
+                    st.markdown(f"""
+                        <p class="card-text"><b><a href="{map_url}" target="_blank">{addr}</a></b></p>
+                        <p class="card-text" style="color: #9E9E9E;">{opened_str} ➔ {closed_str} ({days_diff} days)</p>
+                        <p class="card-text">{service}</p>
+                        <p class="note-text">Note: <a href="{ticket_url}" target="_blank">{notes}</a></p>
+                    """, unsafe_allow_html=True)
 
 if __name__ == "__main__":
     main()

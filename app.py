@@ -30,14 +30,13 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# --- 3. THE "HEIST" FUNCTION (Your Solution) ---
+# --- 3. THE "HEIST" FUNCTION ---
 @st.cache_data(ttl=3600, show_spinner=False)
 def fetch_verint_image(wrapper_url):
     """
     Downloads and decodes a protected image from the SF 311 Verint system
     by mimicking a legitimate browser session handshake.
     """
-    # Quick sanity check
     if not isinstance(wrapper_url, str) or "verint" not in wrapper_url:
         return None
 
@@ -110,7 +109,6 @@ def fetch_verint_image(wrapper_url):
             fname = fname.strip()
             if not fname: continue
             
-            # FILTER: Ignore system-generated maps
             f_lower = fname.lower()
             if f_lower.endswith('m.jpg') or f_lower.endswith('_map.jpg') or f_lower.endswith('_map.jpeg'):
                 continue
@@ -143,7 +141,7 @@ def fetch_verint_image(wrapper_url):
     except Exception: return None
     return None
 
-# --- 4. DATA LOADING (Standard Socrata) ---
+# --- 4. DATA LOADING ---
 @st.cache_data(ttl=600)
 def load_data_v13(district_id):
     eighteen_months_ago = (datetime.now() - timedelta(days=548)).strftime('%Y-%m-%dT%H:%M:%S')
@@ -226,8 +224,12 @@ def main():
 
         st.markdown(f"##### Closure Reasons ({selected_label})")
         st.caption(f"Denominator: {unique_count:,} unique tickets.")
+        
+        # UPDATED: Removed use_container_width=False, kept width=700
         st.dataframe(
-            stats, use_container_width=False, width=700, hide_index=True,
+            stats, 
+            width=700, 
+            hide_index=True,
             column_config={
                 "Closure Reason": st.column_config.TextColumn("Reason", width="medium"),
                 "Count": st.column_config.NumberColumn("Cases", format="%d"),
@@ -239,19 +241,14 @@ def main():
 
     # --- 2. IMAGE GALLERY ---
     
-    # A. Base Filters
     display_df = df.dropna(subset=['media_url'])
     display_df = display_df[~display_df['status_notes'].str.contains("duplicate", case=False, na=False)]
-    
-    # B. Deduplicate by media URL
     display_df = display_df.drop_duplicates(subset=['media_url'])
     
     if display_df.empty:
         st.info("No images found.")
         return
 
-    # To prevent hitting the Verint server too hard on initial load,
-    # we take the most recent 100 images.
     subset_df = display_df.head(100)
     
     image_count = len(subset_df)
@@ -260,28 +257,20 @@ def main():
     COLS_PER_ROW = 4
     cols = st.columns(COLS_PER_ROW)
 
-    # C. Render Loop
     for i, (index, row) in enumerate(subset_df.iterrows()):
         raw_url = row['media_url']
-        
-        # --- IMAGE RESOLUTION LOGIC ---
         final_image = None
         
-        # Case 1: Standard Image (e.g. Imgur, old Cloudinary)
         if isinstance(raw_url, str) and raw_url.lower().endswith(('.jpg', '.jpeg', '.png', '.webp')):
             final_image = raw_url
-            
-        # Case 2: Protected Verint Link (THE HEIST)
         elif isinstance(raw_url, str) and "verintcloudservices" in raw_url:
-            # We call the cracker function. 
-            # If it works, it returns BYTES. If it fails, it returns None.
             final_image = fetch_verint_image(raw_url)
         
-        # If we have a valid image (URL string OR Bytes), render the card
         if final_image:
             with cols[i % COLS_PER_ROW]:
                 with st.container(border=True):
-                    st.image(final_image, use_container_width=True)
+                    # UPDATED: Replaced use_container_width=True with width="stretch"
+                    st.image(final_image, width="stretch")
                     
                     opened = row['requested_datetime']
                     closed = row['closed_date']
@@ -302,7 +291,7 @@ def main():
                         <p class="note-text">Note: <a href="{ticket_url}" target="_blank">{notes}</a></p>
                     """, unsafe_allow_html=True)
 
-    # --- 3. FOOTER & SOURCE LINKS ---
+    # --- 3. FOOTER ---
     st.markdown("---")
     st.caption(f"""
         **Methodology & Sources:**

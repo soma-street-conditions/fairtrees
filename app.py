@@ -36,12 +36,12 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# --- 3. THE "HEIST" FUNCTION (User Provided V2) ---
+# --- 3. THE "HEIST" FUNCTION (Your Exact Solution) ---
 @st.cache_data(ttl=3600, show_spinner=False)
-def fetch_verint_image_v2(wrapper_url):
+def fetch_verint_image_v3(wrapper_url):
     """
-    Production-ready Verint image fetcher.
-    Applies the "Heist" logic: URL Sync -> Handshake -> Nested Payload -> Map Filter -> JSON Unwrap.
+    Downloads and decodes a protected image from the SF 311 Verint system.
+    Includes explicit Map Filtering and JSON Base64 Unwrapping.
     """
     if not isinstance(wrapper_url, str) or "verint" not in wrapper_url:
         return None
@@ -49,21 +49,23 @@ def fetch_verint_image_v2(wrapper_url):
     try:
         session = requests.Session()
         headers = {
+            # User-Agent is critical. Server rejects Python-requests default agent.
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
             "Referer": "https://mobile311.sfgov.org/",
         }
 
-        # 1. SYNC ID (Crucial: Use ID from URL, not dataframe)
+        # --- STEP 1: SYNC ID ---
         parsed = urlparse(wrapper_url)
         qs = parse_qs(parsed.query)
         url_case_id = qs.get('caseid', [None])[0]
         if not url_case_id: return None
 
-        # 2. VISIT PAGE & GET SECRETS
+        # --- STEP 2: ESTABLISH SESSION ---
         r_page = session.get(wrapper_url, headers=headers, timeout=5)
         if r_page.status_code != 200: return None
         html = r_page.text
 
+        # --- STEP 3: EXTRACT KEYS ---
         formref_match = re.search(r'"formref"\s*:\s*"([^"]+)"', html)
         if not formref_match: return None
         formref = formref_match.group(1)
@@ -71,7 +73,7 @@ def fetch_verint_image_v2(wrapper_url):
         csrf_match = re.search(r'name="_csrf_token"\s+content="([^"]+)"', html)
         csrf_token = csrf_match.group(1) if csrf_match else None
 
-        # 3. HANDSHAKE (Authorize Session)
+        # --- STEP 4: API HANDSHAKE ---
         try:
             citizen_url = "https://sanfrancisco.form.us.empro.verintcloudservices.com/api/citizen?archived=Y&preview=false&locale=en"
             headers["Referer"] = r_page.url
@@ -79,11 +81,12 @@ def fetch_verint_image_v2(wrapper_url):
             if csrf_token: headers["X-CSRF-TOKEN"] = csrf_token
             
             r_handshake = session.get(citizen_url, headers=headers, timeout=5)
+            
             if 'Authorization' in r_handshake.headers:
                 headers["Authorization"] = r_handshake.headers['Authorization']
         except: pass
 
-        # 4. GET FILE LIST (Using the winning "Nested" payload)
+        # --- STEP 5: REQUEST FILE LIST ---
         api_base = "https://sanfrancisco.form.us.empro.verintcloudservices.com/api/custom"
         headers["Content-Type"] = "application/json"
         
@@ -108,14 +111,14 @@ def fetch_verint_image_v2(wrapper_url):
         if not filename_str: return None
         raw_files = filename_str.split(';')
 
-        # 5. FILTER MAPS (Crucial: Ignores _map.jpg and m.jpg)
+        # --- STEP 6: FILTER & DOWNLOAD ---
         target_filename = None
         for fname in raw_files:
             fname = fname.strip()
             if not fname: continue
             
+            # FILTER: Ignore system-generated maps to find the user photo.
             f_lower = fname.lower()
-            # Skip ANY file that looks like a map
             if f_lower.endswith('m.jpg') or f_lower.endswith('_map.jpg') or f_lower.endswith('_map.jpeg'):
                 continue
                 
@@ -125,7 +128,7 @@ def fetch_verint_image_v2(wrapper_url):
         
         if not target_filename: return None
 
-        # 6. DOWNLOAD & UNWRAP (Crucial: Handles Base64 JSON response)
+        # Download the specific file
         download_payload = nested_payload.copy()
         download_payload["data"]["filename"] = target_filename
         
@@ -136,18 +139,20 @@ def fetch_verint_image_v2(wrapper_url):
         
         if r_image.status_code == 200:
             try:
-                # The server returns JSON with a 'txt_file' field containing Base64 data
+                # --- STEP 7: JSON UNWRAP ---
+                # The server returns JSON with a Base64 string, NOT raw bytes.
                 response_json = r_image.json()
                 if 'data' in response_json and 'txt_file' in response_json['data']:
                     b64_data = response_json['data']['txt_file']
+                    
+                    # Remove header if present (e.g. "data:image/jpeg;base64,...")
                     if "," in b64_data: b64_data = b64_data.split(",")[1]
+                    
                     return base64.b64decode(b64_data)
             except:
                 return None
             
-    except Exception:
-        return None
-        
+    except Exception: return None
     return None
 
 # --- 4. DATA LOADING ---
@@ -273,18 +278,16 @@ def main():
         if isinstance(raw_url, str) and raw_url.lower().endswith(('.jpg', '.jpeg', '.png', '.webp')):
             final_image = raw_url
         elif isinstance(raw_url, str) and "verintcloudservices" in raw_url:
-            # Use the CORRECTED V2 function
-            final_image = fetch_verint_image_v2(raw_url)
+            # Use V3 function with correct unwrap logic
+            final_image = fetch_verint_image_v3(raw_url)
         
         with cols[i % COLS_PER_ROW]:
             with st.container(border=True):
-                # Render Image or Fallback
                 if final_image:
                     st.image(final_image, width="stretch")
                 else:
                     st.markdown("""<div class="error-card">⚠️ Image Unavailable</div>""", unsafe_allow_html=True)
                     
-                # Metadata
                 opened = row['requested_datetime']
                 closed = row['closed_date']
                 opened_str = opened.strftime('%m/%d/%y') if pd.notnull(opened) else "?"

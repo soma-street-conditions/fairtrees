@@ -32,11 +32,11 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# --- 3. THE "HEIST" FUNCTION (With Validation) ---
+# --- 3. THE "HEIST" FUNCTION ---
 @st.cache_data(ttl=3600, show_spinner=False)
 def fetch_verint_image_v3(wrapper_url):
     """
-    Downloads, decodes, AND VALIDATES a protected image from the SF 311 Verint system.
+    Attempts to download/decode Verint images. Returns None on failure.
     """
     if not isinstance(wrapper_url, str) or "verint" not in wrapper_url:
         return None
@@ -137,11 +137,10 @@ def fetch_verint_image_v3(wrapper_url):
                     
                     img_bytes = base64.b64decode(b64_data)
                     
-                    # VALIDATION: Try to open with PIL. If it fails, it's not an image.
-                    # This prevents 'AttributeError' in st.image later.
+                    # Validate image bytes to ensure st.image can handle them
                     try:
                         with Image.open(io.BytesIO(img_bytes)) as img:
-                            img.verify() # Checks if it's a valid image
+                            img.verify()
                         return img_bytes
                     except:
                         return None
@@ -258,32 +257,26 @@ def main():
 
     for i, (index, row) in enumerate(subset_df.iterrows()):
         raw_url = row['media_url']
-        final_image = None # Default to None to avoid passing bad URLs
         
-        # 1. Try to fetch Verint
+        # --- PERMISSIVE LOGIC START ---
+        # 1. Start with the raw URL. If it's a JPG, it stays this way.
+        image_to_show = raw_url 
+        
+        # 2. Only if it's Verint, try to upgrade it to bytes.
         if isinstance(raw_url, str) and "verintcloudservices" in raw_url:
             decoded_bytes = fetch_verint_image_v3(raw_url)
+            # 3. If upgrade worked, use bytes. If not, STAY WITH RAW URL.
             if decoded_bytes:
-                final_image = decoded_bytes
-        # 2. Or use Standard URL (Imgur, etc)
-        elif isinstance(raw_url, str) and raw_url.lower().endswith(('.jpg', '.jpeg', '.png', '.webp')):
-            final_image = raw_url
-        
-        # 3. SAFETY BLOCK: Only try to render if we have a valid source.
-        #    If final_image is still None (Verint fetch failed), we render nothing/placeholder
-        #    rather than crashing on the raw Verint URL.
+                image_to_show = decoded_bytes
+        # --- PERMISSIVE LOGIC END ---
         
         with cols[i % COLS_PER_ROW]:
             with st.container(border=True):
-                if final_image:
-                    try:
-                        st.image(final_image, width="stretch")
-                    except:
-                        # Fallback for weird edge cases
-                        st.markdown("⚠️ Display Error")
-                else:
-                    # Broken Image Icon for failed Verint fetches
-                    st.markdown("❌ Image Failed")
+                # 4. Render whatever we have. 
+                # If bytes -> works. 
+                # If valid URL -> works.
+                # If broken Verint URL -> shows broken image icon (Standard Browser Behavior).
+                st.image(image_to_show, width="stretch")
                     
                 opened = row['requested_datetime']
                 closed = row['closed_date']

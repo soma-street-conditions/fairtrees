@@ -4,6 +4,7 @@ import requests
 import re
 import base64
 import io
+from PIL import Image
 from urllib.parse import urlparse, parse_qs
 from datetime import datetime, timedelta
 
@@ -19,44 +20,23 @@ SUPERVISOR_MAP = {
     "10": "10 - Shamann Walton", "11": "11 - Chyanne Chen"
 }
 
-# --- 2. STYLING & HEADER ---
+# --- 2. STYLING ---
 st.markdown("""
     <style>
         div[data-testid="stVerticalBlock"] > div { gap: 0rem; }
-        
-        .card-text {
-            font-family: "Source Sans Pro", sans-serif;
-            font-size: 13px;
-            line-height: 1.4;
-            color: #E0E0E0;
-            margin: 0px;
-        }
-        .note-text {
-            font-family: "Source Sans Pro", sans-serif;
-            font-size: 11px;
-            line-height: 1.2;
-            color: #9E9E9E;
-            margin-top: 4px;
-        }
-        
-        div[data-testid="stImage"] > img {
-            object-fit: cover; 
-            height: 180px; 
-            width: 100%;
-            border-radius: 4px;
-        }
-        
+        .card-text { font-family: "Source Sans Pro", sans-serif; font-size: 13px; line-height: 1.4; color: #E0E0E0; margin: 0px; }
+        .note-text { font-family: "Source Sans Pro", sans-serif; font-size: 11px; line-height: 1.2; color: #9E9E9E; margin-top: 4px; }
+        div[data-testid="stImage"] > img { object-fit: cover; height: 180px; width: 100%; border-radius: 4px; }
         a { color: #58A6FF; text-decoration: none; }
         a:hover { text-decoration: underline; }
     </style>
 """, unsafe_allow_html=True)
 
-# --- 3. THE "HEIST" FUNCTION ---
+# --- 3. THE "HEIST" FUNCTION (With Validation) ---
 @st.cache_data(ttl=3600, show_spinner=False)
 def fetch_verint_image_v3(wrapper_url):
     """
-    Downloads and decodes a protected image from the SF 311 Verint system.
-    Returns RAW BYTES if successful, or None if failed.
+    Downloads, decodes, AND VALIDATES a protected image from the SF 311 Verint system.
     """
     if not isinstance(wrapper_url, str) or "verint" not in wrapper_url:
         return None
@@ -91,11 +71,11 @@ def fetch_verint_image_v3(wrapper_url):
             citizen_url = "https://sanfrancisco.form.us.empro.verintcloudservices.com/api/citizen?archived=Y&preview=false&locale=en"
             headers["Referer"] = r_page.url
             headers["Origin"] = "https://sanfrancisco.form.us.empro.verintcloudservices.com"
-            if csrf_token: headers["X-CSRF-TOKEN"] = csrf_token
+            if csrf_token: headers["X-CSRF-TOKEN"] = str(csrf_token)
             
             r_handshake = session.get(citizen_url, headers=headers, timeout=5)
             if 'Authorization' in r_handshake.headers:
-                headers["Authorization"] = r_handshake.headers['Authorization']
+                headers["Authorization"] = str(r_handshake.headers['Authorization'])
         except: pass
 
         # 4. LIST FILES
@@ -103,7 +83,7 @@ def fetch_verint_image_v3(wrapper_url):
         headers["Content-Type"] = "application/json"
         
         nested_payload = {
-            "data": {"caseid": str(url_case_id), "formref": formref},
+            "data": {"caseid": str(url_case_id), "formref": str(formref)},
             "name": "download_attachments",
             "email": "", "xref": "", "xref1": "", "xref2": ""
         }
@@ -149,12 +129,22 @@ def fetch_verint_image_v3(wrapper_url):
         
         if r_image.status_code == 200:
             try:
-                # 7. UNWRAP JSON
+                # 7. UNWRAP & VALIDATE
                 response_json = r_image.json()
                 if 'data' in response_json and 'txt_file' in response_json['data']:
                     b64_data = response_json['data']['txt_file']
                     if "," in b64_data: b64_data = b64_data.split(",")[1]
-                    return base64.b64decode(b64_data)
+                    
+                    img_bytes = base64.b64decode(b64_data)
+                    
+                    # VALIDATION: Try to open with PIL. If it fails, it's not an image.
+                    # This prevents 'AttributeError' in st.image later.
+                    try:
+                        with Image.open(io.BytesIO(img_bytes)) as img:
+                            img.verify() # Checks if it's a valid image
+                        return img_bytes
+                    except:
+                        return None
             except:
                 return None
             
@@ -244,17 +234,7 @@ def main():
 
         st.markdown(f"##### Closure Reasons ({selected_label})")
         st.caption(f"Denominator: {unique_count:,} unique tickets.")
-        
-        st.dataframe(
-            stats, 
-            width=700, 
-            hide_index=True,
-            column_config={
-                "Closure Reason": st.column_config.TextColumn("Reason", width="medium"),
-                "Count": st.column_config.NumberColumn("Cases", format="%d"),
-                "Percentage": st.column_config.ProgressColumn("Share", format="%.1f%%", min_value=0, max_value=100),
-            }
-        )
+        st.dataframe(stats, width=700, hide_index=True)
     
     st.markdown("---")
 
@@ -278,23 +258,32 @@ def main():
 
     for i, (index, row) in enumerate(subset_df.iterrows()):
         raw_url = row['media_url']
+        final_image = None # Default to None to avoid passing bad URLs
         
-        # DEFAULT: Use the raw URL. If it's a standard JPG, this works. 
-        # If it's Verint and the fetch fails, this will break (which is what you want).
-        image_source = raw_url 
-        
-        # VERINT HANDLER
+        # 1. Try to fetch Verint
         if isinstance(raw_url, str) and "verintcloudservices" in raw_url:
             decoded_bytes = fetch_verint_image_v3(raw_url)
             if decoded_bytes:
-                # If successful, swap the source to the bytes
-                image_source = decoded_bytes
+                final_image = decoded_bytes
+        # 2. Or use Standard URL (Imgur, etc)
+        elif isinstance(raw_url, str) and raw_url.lower().endswith(('.jpg', '.jpeg', '.png', '.webp')):
+            final_image = raw_url
+        
+        # 3. SAFETY BLOCK: Only try to render if we have a valid source.
+        #    If final_image is still None (Verint fetch failed), we render nothing/placeholder
+        #    rather than crashing on the raw Verint URL.
         
         with cols[i % COLS_PER_ROW]:
             with st.container(border=True):
-                # Render whatever we have. If it's a broken URL, st.image shows broken icon.
-                # If it's bytes, it shows the image.
-                st.image(image_source, width="stretch")
+                if final_image:
+                    try:
+                        st.image(final_image, width="stretch")
+                    except:
+                        # Fallback for weird edge cases
+                        st.markdown("⚠️ Display Error")
+                else:
+                    # Broken Image Icon for failed Verint fetches
+                    st.markdown("❌ Image Failed")
                     
                 opened = row['requested_datetime']
                 closed = row['closed_date']

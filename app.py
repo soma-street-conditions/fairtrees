@@ -302,5 +302,15 @@ def main():
                         <p class="note-text">Note: <a href="{ticket_url}" target="_blank">{notes}</a></p>
                     """, unsafe_allow_html=True)
 
+    # --- 3. FOOTER & SOURCE LINKS ---
+    st.markdown("---")
+    st.caption(f"""
+        **Methodology & Sources:**
+        * **Data Source:** [SF Open Data - 311 Cases](https://data.sfgov.org/City-Infrastructure/311-Cases/vw6y-z8j6)
+        * **Image Resolution:** Protected Verint images are securely resolved via direct session handshake.
+        * **Filtering:** Duplicate cases (text-based) are excluded from the image feed but included in statistics.
+        * **Date Range:** Showing records from the last 18 months.
+    """)
+
 if __name__ == "__main__":
     main()

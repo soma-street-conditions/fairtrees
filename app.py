@@ -36,7 +36,7 @@ st.markdown("""
 @st.cache_data(ttl=3600, show_spinner=False)
 def fetch_verint_image_v3(wrapper_url):
     """
-    Attempts to download/decode Verint images. Returns None on failure.
+    Downloads and decodes a protected image from the SF 311 Verint system.
     """
     if not isinstance(wrapper_url, str) or "verint" not in wrapper_url:
         return None
@@ -137,7 +137,7 @@ def fetch_verint_image_v3(wrapper_url):
                     
                     img_bytes = base64.b64decode(b64_data)
                     
-                    # Validate image bytes to ensure st.image can handle them
+                    # Validate image bytes
                     try:
                         with Image.open(io.BytesIO(img_bytes)) as img:
                             img.verify()
@@ -241,6 +241,7 @@ def main():
     
     display_df = df.dropna(subset=['media_url'])
     display_df = display_df[~display_df['status_notes'].str.contains("duplicate", case=False, na=False)]
+    # Use str() converter to ensure drop_duplicates doesn't fail on dicts
     display_df = display_df.drop_duplicates(subset=['media_url'])
     
     if display_df.empty:
@@ -256,27 +257,40 @@ def main():
     cols = st.columns(COLS_PER_ROW)
 
     for i, (index, row) in enumerate(subset_df.iterrows()):
-        raw_url = row['media_url']
+        raw = row['media_url']
         
-        # --- PERMISSIVE LOGIC START ---
-        # 1. Start with the raw URL. If it's a JPG, it stays this way.
-        image_to_show = raw_url 
-        
-        # 2. Only if it's Verint, try to upgrade it to bytes.
-        if isinstance(raw_url, str) and "verintcloudservices" in raw_url:
-            decoded_bytes = fetch_verint_image_v3(raw_url)
-            # 3. If upgrade worked, use bytes. If not, STAY WITH RAW URL.
-            if decoded_bytes:
-                image_to_show = decoded_bytes
-        # --- PERMISSIVE LOGIC END ---
+        # --- CRITICAL FIX: SANITIZE INPUT ---
+        # Socrata API sometimes returns dicts {'url': ...}. We extract the string.
+        image_url = None
+        if isinstance(raw, dict):
+            image_url = raw.get('url', None)
+        elif isinstance(raw, str):
+            image_url = raw
+            
+        # If we have no valid URL string, skip rendering
+        if not image_url: continue
+
+        # --- LOGIC ---
+        final_bytes = None
+        # Only attempt heist on Verint links
+        if "verintcloudservices" in image_url:
+            final_bytes = fetch_verint_image_v3(image_url)
         
         with cols[i % COLS_PER_ROW]:
             with st.container(border=True):
-                # 4. Render whatever we have. 
-                # If bytes -> works. 
-                # If valid URL -> works.
-                # If broken Verint URL -> shows broken image icon (Standard Browser Behavior).
-                st.image(image_to_show, width="stretch")
+                # RENDER STRATEGY:
+                # 1. If we have BYTES (Successful Heist), use st.image
+                # 2. If we have URL (Standard or Failed Heist), use HTML <img src>
+                #    This prevents Streamlit from crashing on broken/protected URLs.
+                
+                if final_bytes:
+                    st.image(final_bytes, width="stretch")
+                else:
+                    # HTML Fallback -> Let the browser handle the error (Broken Icon)
+                    st.markdown(f'''
+                        <img src="{image_url}" 
+                             style="width: 100%; height: 180px; object-fit: cover; border-radius: 4px;">
+                    ''', unsafe_allow_html=True)
                     
                 opened = row['requested_datetime']
                 closed = row['closed_date']

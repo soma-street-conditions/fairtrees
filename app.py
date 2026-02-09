@@ -24,9 +24,37 @@ SUPERVISOR_MAP = {
 st.markdown("""
     <style>
         div[data-testid="stVerticalBlock"] > div { gap: 0rem; }
-        .card-text { font-family: "Source Sans Pro", sans-serif; font-size: 13px; line-height: 1.4; color: #E0E0E0; margin: 0px; }
-        .note-text { font-family: "Source Sans Pro", sans-serif; font-size: 11px; line-height: 1.2; color: #9E9E9E; margin-top: 4px; }
-        div[data-testid="stImage"] > img { object-fit: cover; height: 180px; width: 100%; border-radius: 4px; }
+        
+        .card-text {
+            font-family: "Source Sans Pro", sans-serif;
+            font-size: 13px;
+            line-height: 1.4;
+            color: #E0E0E0;
+            margin: 0px;
+        }
+        .note-text {
+            font-family: "Source Sans Pro", sans-serif;
+            font-size: 11px;
+            line-height: 1.2;
+            color: #9E9E9E;
+            margin-top: 4px;
+        }
+        
+        div[data-testid="stImage"] > img {
+            object-fit: cover; 
+            height: 180px; 
+            width: 100%;
+            border-radius: 4px;
+        }
+        
+        /* Style for our fallback HTML images to match Streamlit's look */
+        .custom-img {
+            object-fit: cover; 
+            height: 180px; 
+            width: 100%; 
+            border-radius: 4px; 
+        }
+        
         a { color: #58A6FF; text-decoration: none; }
         a:hover { text-decoration: underline; }
     </style>
@@ -137,7 +165,6 @@ def fetch_verint_image_v3(wrapper_url):
                     
                     img_bytes = base64.b64decode(b64_data)
                     
-                    # Validate image bytes
                     try:
                         with Image.open(io.BytesIO(img_bytes)) as img:
                             img.verify()
@@ -151,12 +178,15 @@ def fetch_verint_image_v3(wrapper_url):
     return None
 
 # --- 4. DATA LOADING ---
-@st.cache_data(ttl=600)
-def load_data_v13(district_id):
+# Renamed function and added friendly spinner text
+@st.cache_data(ttl=600, show_spinner="Loading Tree Tickets...")
+def load_tree_tickets(district_id):
     eighteen_months_ago = (datetime.now() - timedelta(days=548)).strftime('%Y-%m-%dT%H:%M:%S')
     
     select_cols = "service_request_id, requested_datetime, closed_date, service_details, status_notes, address, media_url, supervisor_district"
-    where_clause = f"closed_date > '{eighteen_months_ago}' AND agency_responsible LIKE '%PW%' AND (upper(service_details) LIKE '%TREE_BASIN%')"
+    
+    # --- EXACT FILTER: Empty_tree_basin ---
+    where_clause = f"closed_date > '{eighteen_months_ago}' AND agency_responsible LIKE '%PW%' AND service_details = 'Empty_tree_basin'"
 
     if district_id != "Citywide":
         where_clause += f" AND supervisor_district = '{district_id}'"
@@ -214,8 +244,8 @@ def main():
     selected_id = rev_map[selected_label]
     st.query_params["district"] = selected_id
 
-    # --- Load Data ---
-    df = load_data_v13(selected_id)
+    # --- Load Data (Friendly Name) ---
+    df = load_tree_tickets(selected_id)
 
     if df.empty:
         st.warning(f"No records found for {selected_label}.")
@@ -241,75 +271,75 @@ def main():
     
     display_df = df.dropna(subset=['media_url'])
     display_df = display_df[~display_df['status_notes'].str.contains("duplicate", case=False, na=False)]
-    # Use str() converter to ensure drop_duplicates doesn't fail on dicts
-    display_df = display_df.drop_duplicates(subset=['media_url'])
+    
+    # Fix for drop_duplicates crashing on dicts: Convert to string first
+    display_df['media_url_str'] = display_df['media_url'].astype(str)
+    display_df = display_df.drop_duplicates(subset=['media_url_str'])
     
     if display_df.empty:
         st.info("No images found.")
         return
 
     subset_df = display_df.head(100)
-    
     image_count = len(subset_df)
     st.markdown(f"#### 📸 Showing {image_count} recent cases with images")
 
+    # --- GRID LAYOUT FIX FOR MOBILE ---
+    # Loop row-by-row
+    
     COLS_PER_ROW = 4
-    cols = st.columns(COLS_PER_ROW)
-
-    for i, (index, row) in enumerate(subset_df.iterrows()):
-        raw = row['media_url']
+    
+    for i in range(0, len(subset_df), COLS_PER_ROW):
+        row_chunk = subset_df.iloc[i : i + COLS_PER_ROW]
+        cols = st.columns(COLS_PER_ROW)
         
-        # --- CRITICAL FIX: SANITIZE INPUT ---
-        # Socrata API sometimes returns dicts {'url': ...}. We extract the string.
-        image_url = None
-        if isinstance(raw, dict):
-            image_url = raw.get('url', None)
-        elif isinstance(raw, str):
-            image_url = raw
+        for j, (index, row) in enumerate(row_chunk.iterrows()):
+            raw = row['media_url']
             
-        # If we have no valid URL string, skip rendering
-        if not image_url: continue
-
-        # --- LOGIC ---
-        final_bytes = None
-        # Only attempt heist on Verint links
-        if "verintcloudservices" in image_url:
-            final_bytes = fetch_verint_image_v3(image_url)
-        
-        with cols[i % COLS_PER_ROW]:
-            with st.container(border=True):
-                # RENDER STRATEGY:
-                # 1. If we have BYTES (Successful Heist), use st.image
-                # 2. If we have URL (Standard or Failed Heist), use HTML <img src>
-                #    This prevents Streamlit from crashing on broken/protected URLs.
+            # Sanitize Socrata Dicts
+            image_url = None
+            if isinstance(raw, dict):
+                image_url = raw.get('url', None)
+            elif isinstance(raw, str):
+                image_url = raw
                 
-                if final_bytes:
-                    st.image(final_bytes, width="stretch")
-                else:
-                    # HTML Fallback -> Let the browser handle the error (Broken Icon)
-                    st.markdown(f'''
-                        <img src="{image_url}" 
-                             style="width: 100%; height: 180px; object-fit: cover; border-radius: 4px;">
-                    ''', unsafe_allow_html=True)
+            if not image_url: continue
+
+            # Attempt Heist if Verint
+            final_bytes = None
+            if "verintcloudservices" in image_url:
+                final_bytes = fetch_verint_image_v3(image_url)
+            
+            # Render Tile
+            with cols[j]:
+                with st.container(border=True):
+                    # Use BYTES (st.image) or URL (HTML)
+                    if final_bytes:
+                        st.image(final_bytes, width="stretch")
+                    else:
+                        # Fallback HTML to prevent crashes on bad URLs
+                        st.markdown(f'''
+                            <img src="{image_url}" class="custom-img">
+                        ''', unsafe_allow_html=True)
+                        
+                    opened = row['requested_datetime']
+                    closed = row['closed_date']
+                    opened_str = opened.strftime('%m/%d/%y') if pd.notnull(opened) else "?"
+                    closed_str = closed.strftime('%m/%d/%y') if pd.notnull(closed) else "?"
+                    days_diff = (closed - opened).days if (pd.notnull(opened) and pd.notnull(closed)) else "?"
                     
-                opened = row['requested_datetime']
-                closed = row['closed_date']
-                opened_str = opened.strftime('%m/%d/%y') if pd.notnull(opened) else "?"
-                closed_str = closed.strftime('%m/%d/%y') if pd.notnull(closed) else "?"
-                days_diff = (closed - opened).days if (pd.notnull(opened) and pd.notnull(closed)) else "?"
-                
-                service = str(row['service_details']).replace('_', ' ').title()
-                notes = str(row['status_notes'])
-                addr = str(row['address']).split(',')[0]
-                map_url = f"https://www.google.com/maps/search/?api=1&query={addr.replace(' ', '+')}+San+Francisco"
-                ticket_url = f"https://mobile311.sfgov.org/tickets/{row['service_request_id']}"
+                    service = str(row['service_details']).replace('_', ' ').title()
+                    notes = str(row['status_notes'])
+                    addr = str(row['address']).split(',')[0]
+                    map_url = f"https://www.google.com/maps/search/?api=1&query={addr.replace(' ', '+')}+San+Francisco"
+                    ticket_url = f"https://mobile311.sfgov.org/tickets/{row['service_request_id']}"
 
-                st.markdown(f"""
-                    <p class="card-text"><b><a href="{map_url}" target="_blank">{addr}</a></b></p>
-                    <p class="card-text" style="color: #9E9E9E;">{opened_str} ➔ {closed_str} ({days_diff} days)</p>
-                    <p class="card-text">{service}</p>
-                    <p class="note-text">Note: <a href="{ticket_url}" target="_blank">{notes}</a></p>
-                """, unsafe_allow_html=True)
+                    st.markdown(f"""
+                        <p class="card-text"><b><a href="{map_url}" target="_blank">{addr}</a></b></p>
+                        <p class="card-text" style="color: #9E9E9E;">{opened_str} ➔ {closed_str} ({days_diff} days)</p>
+                        <p class="card-text">{service}</p>
+                        <p class="note-text">Note: <a href="{ticket_url}" target="_blank">{notes}</a></p>
+                    """, unsafe_allow_html=True)
 
     # --- 3. FOOTER ---
     st.markdown("---")

@@ -8,7 +8,7 @@ from PIL import Image
 from urllib.parse import urlparse, parse_qs
 from datetime import datetime, timedelta
 
-# 1. CONFIGURATION
+# --- 1. CONFIGURATION ---
 st.set_page_config(page_title="SF Tree Basin Maintenance", page_icon="🌳", layout="wide")
 
 API_URL = "https://data.sfgov.org/resource/vw6y-z8j6.json"
@@ -20,7 +20,7 @@ SUPERVISOR_MAP = {
     "10": "10 - Shamann Walton", "11": "11 - Chyanne Chen"
 }
 
-# 2. STYLING
+# --- 2. STYLING ---
 st.markdown("""
     <style>
         div[data-testid="stVerticalBlock"] > div { gap: 0rem; }
@@ -60,7 +60,7 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# 3. THE "HEIST" FUNCTION
+# --- 3. THE "HEIST" FUNCTION ---
 @st.cache_data(ttl=3600, show_spinner=False)
 def fetch_verint_image_v3(wrapper_url):
     """
@@ -177,15 +177,15 @@ def fetch_verint_image_v3(wrapper_url):
     except Exception: return None
     return None
 
-# 4. DATA LOADING
+# --- 4. DATA LOADING ---
 @st.cache_data(ttl=600, show_spinner="Loading Tree Tickets...")
 def load_tree_tickets(district_id):
     eighteen_months_ago = (datetime.now() - timedelta(days=548)).strftime('%Y-%m-%dT%H:%M:%S')
     
     select_cols = "service_request_id, requested_datetime, closed_date, service_details, status_notes, address, media_url, supervisor_district"
     
-    # EXACT FILTER: empty_tree_basin
-    where_clause = f"closed_date > '{eighteen_months_ago}' AND responsible_agency LIKE '%PW%' AND service_details = 'empty_tree_basin'"
+    # --- FLEXIBLE FILTER: Case-insensitive wildcard for tree basin records ---
+    where_clause = f"closed_date > '{eighteen_months_ago}' AND agency_responsible LIKE '%PW%' AND lower(service_details) LIKE '%empty%tree%basin%'"
 
     if district_id != "Citywide":
         where_clause += f" AND supervisor_district = '{district_id}'"
@@ -221,12 +221,12 @@ def get_category(note):
     if clean.startswith("case "): clean = clean[5:].strip()
     return clean.split(' ')[0].title()
 
-# 5. MAIN APP
+# --- 5. MAIN APP ---
 
 def main():
     st.header("SF Tree Basin Maintenance Tracker")
     
-    # Filter Logic
+    # --- Filter Logic ---
     query_params = st.query_params
     url_district = query_params.get("district", "Citywide")
     district_list = ["Citywide"] + list(SUPERVISOR_MAP.values())
@@ -243,14 +243,14 @@ def main():
     selected_id = rev_map[selected_label]
     st.query_params["district"] = selected_id
 
-    # Load Data (Friendly Name)
+    # --- Load Data (Friendly Name) ---
     df = load_tree_tickets(selected_id)
 
     if df.empty:
         st.warning(f"No records found for {selected_label}.")
         return
 
-    # 1. STATISTICS
+    # --- 1. STATISTICS ---
     unique_cases_df = df.drop_duplicates(subset=['service_request_id'])
     unique_count = len(unique_cases_df)
     
@@ -266,7 +266,7 @@ def main():
     
     st.markdown("---")
 
-    # 2. IMAGE GALLERY
+    # --- 2. IMAGE GALLERY ---
     
     display_df = df.dropna(subset=['media_url'])
     display_df = display_df[~display_df['status_notes'].str.contains("duplicate", case=False, na=False)]
@@ -283,7 +283,7 @@ def main():
     image_count = len(subset_df)
     st.markdown(f"#### 📸 Showing {image_count} recent cases with images")
 
-    # GRID LAYOUT FIX FOR MOBILE
+    # --- GRID LAYOUT FIX FOR MOBILE ---
     # Loop row-by-row
     
     COLS_PER_ROW = 4
@@ -340,7 +340,7 @@ def main():
                         <p class="note-text">Note: <a href="{ticket_url}" target="_blank">{notes}</a></p>
                     """, unsafe_allow_html=True)
 
-    # 3. FOOTER
+    # --- 3. FOOTER ---
     st.markdown("---")
     st.caption(f"""
         **Methodology & Sources:**

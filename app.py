@@ -14,10 +14,10 @@ st.set_page_config(page_title="FairTrees.org | SF Tree Basin Tracker", page_icon
 API_URL = "https://data.sfgov.org/resource/vw6y-z8j6.json"
 
 SUPERVISOR_MAP = {
-    "1": "1 - Connie Chan", "2": "2 - Catherine Stefani", "3": "3 - Danny Sauter",
-    "4": "4 - Joel Engardio", "5": "5 - Bilal Mahmood", "6": "6 - Matt Dorsey",
-    "7": "7 - Myrna Melgar", "8": "8 - Rafael Mandelman", "9": "9 - Hillary Ronen",
-    "10": "10 - Shamann Walton", "11": "11 - Ahsha Safai"
+    "1": "1 - Connie Chan", "2": "2 - Stephen Sherrill", "3": "3 - Danny Sauter",
+    "4": "4 - Alan Wong", "5": "5 - Bilal Mahmood", "6": "6 - Matt Dorsey",
+    "7": "7 - Myrna Melgar", "8": "8 - Rafael Mandelman", "9": "9 - Jackie Fielder",
+    "10": "10 - Shamann Walton", "11": "11 - Chyanne Chen"
 }
 
 # --- 2. STYLING ---

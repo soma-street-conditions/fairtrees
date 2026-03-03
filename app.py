@@ -177,13 +177,21 @@ def fetch_verint_image_v3(wrapper_url):
 def load_tree_tickets(district_id):
     eighteen_months_ago = (datetime.now() - timedelta(days=548)).strftime('%Y-%m-%dT%H:%M:%S')
     
-    select_cols = "service_request_id, requested_datetime, closed_date, service_details, status_notes, address, media_url, supervisor_district"
-    where_clause = f"closed_date > '{eighteen_months_ago}' AND agency_responsible LIKE '%PW%' AND lower(service_details) LIKE '%empty%tree%basin%'"
+    # Using the exact SoQL query structure for maximum efficiency and robust filtering
+    soql_query = f"""
+        SELECT service_request_id, requested_datetime, closed_date, service_details, status_notes, address, media_url, supervisor_district 
+        WHERE (closed_date > '{eighteen_months_ago}' AND closed_date IS NOT NULL) 
+        AND (upper(service_details) LIKE '%EMPTY_TREE_BASIN%')
+    """
 
+    # Dynamically append the district filter if not Citywide
     if district_id != "Citywide":
-        where_clause += f" AND supervisor_district = '{district_id}'"
+        soql_query += f" AND supervisor_district = '{district_id}'"
+        
+    # Order by newest first and bypass the 1,000 row default limit
+    soql_query += " ORDER BY closed_date DESC LIMIT 5000"
 
-    params = {"$select": select_cols, "$where": where_clause, "$limit": 5000, "$order": "closed_date DESC"}
+    params = {"$query": soql_query}
 
     try:
         r = requests.get(API_URL, params=params)

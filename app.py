@@ -9,21 +9,27 @@ from urllib.parse import urlparse, parse_qs
 from datetime import datetime, timedelta
 
 # --- 1. CONFIGURATION ---
-st.set_page_config(page_title="SF Tree Basin Maintenance", page_icon="🌳", layout="wide")
+st.set_page_config(page_title="FairTrees.org | SF Tree Basin Monitor", page_icon="🌳", layout="wide")
 
 API_URL = "https://data.sfgov.org/resource/vw6y-z8j6.json"
 
 SUPERVISOR_MAP = {
-    "1": "1 - Connie Chan", "2": "2 - Stephen Sherrill", "3": "3 - Danny Sauter",
-    "4": "4 - Alan Wong", "5": "5 - Bilal Mahmood", "6": "6 - Matt Dorsey",
-    "7": "7 - Myrna Melgar", "8": "8 - Rafael Mandelman", "9": "9 - Jackie Fielder",
-    "10": "10 - Shamann Walton", "11": "11 - Chyanne Chen"
+    "1": "1 - Connie Chan", "2": "2 - Catherine Stefani", "3": "3 - Danny Sauter",
+    "4": "4 - Joel Engardio", "5": "5 - Bilal Mahmood", "6": "6 - Matt Dorsey",
+    "7": "7 - Myrna Melgar", "8": "8 - Rafael Mandelman", "9": "9 - Hillary Ronen",
+    "10": "10 - Shamann Walton", "11": "11 - Ahsha Safai"
 }
 
 # --- 2. STYLING ---
 st.markdown("""
     <style>
-        div[data-testid="stVerticalBlock"] > div { gap: 0rem; }
+        div[data-testid="stVerticalBlock"] > div { gap: 0.5rem; }
+        
+        .hero-text {
+            font-size: 1.1rem;
+            line-height: 1.6;
+            margin-bottom: 1rem;
+        }
         
         .card-text {
             font-family: "Source Sans Pro", sans-serif;
@@ -47,7 +53,6 @@ st.markdown("""
             border-radius: 4px;
         }
         
-        /* Style for our fallback HTML images to match Streamlit's look */
         .custom-img {
             object-fit: cover; 
             height: 180px; 
@@ -63,9 +68,7 @@ st.markdown("""
 # --- 3. THE "HEIST" FUNCTION ---
 @st.cache_data(ttl=3600, show_spinner=False)
 def fetch_verint_image_v3(wrapper_url):
-    """
-    Downloads and decodes a protected image from the SF 311 Verint system.
-    """
+    """Downloads and decodes a protected image from the SF 311 Verint system."""
     if not isinstance(wrapper_url, str) or "verint" not in wrapper_url:
         return None
 
@@ -76,13 +79,11 @@ def fetch_verint_image_v3(wrapper_url):
             "Referer": "https://mobile311.sfgov.org/",
         }
 
-        # 1. SYNC ID
         parsed = urlparse(wrapper_url)
         qs = parse_qs(parsed.query)
         url_case_id = qs.get('caseid', [None])[0]
         if not url_case_id: return None
 
-        # 2. VISIT PAGE
         r_page = session.get(wrapper_url, headers=headers, timeout=5)
         if r_page.status_code != 200: return None
         html = r_page.text
@@ -94,7 +95,6 @@ def fetch_verint_image_v3(wrapper_url):
         csrf_match = re.search(r'name="_csrf_token"\s+content="([^"]+)"', html)
         csrf_token = csrf_match.group(1) if csrf_match else None
 
-        # 3. HANDSHAKE
         try:
             citizen_url = "https://sanfrancisco.form.us.empro.verintcloudservices.com/api/citizen?archived=Y&preview=false&locale=en"
             headers["Referer"] = r_page.url
@@ -106,7 +106,6 @@ def fetch_verint_image_v3(wrapper_url):
                 headers["Authorization"] = str(r_handshake.headers['Authorization'])
         except: pass
 
-        # 4. LIST FILES
         api_base = "https://sanfrancisco.form.us.empro.verintcloudservices.com/api/custom"
         headers["Content-Type"] = "application/json"
         
@@ -131,7 +130,6 @@ def fetch_verint_image_v3(wrapper_url):
         if not filename_str: return None
         raw_files = filename_str.split(';')
 
-        # 5. FILTER MAPS
         target_filename = None
         for fname in raw_files:
             fname = fname.strip()
@@ -146,7 +144,6 @@ def fetch_verint_image_v3(wrapper_url):
         
         if not target_filename: return None
 
-        # 6. DOWNLOAD
         download_payload = nested_payload.copy()
         download_payload["data"]["filename"] = target_filename
         
@@ -157,7 +154,6 @@ def fetch_verint_image_v3(wrapper_url):
         
         if r_image.status_code == 200:
             try:
-                # 7. UNWRAP & VALIDATE
                 response_json = r_image.json()
                 if 'data' in response_json and 'txt_file' in response_json['data']:
                     b64_data = response_json['data']['txt_file']
@@ -184,7 +180,6 @@ def load_tree_tickets(district_id):
     
     select_cols = "service_request_id, requested_datetime, closed_date, service_details, status_notes, address, media_url, supervisor_district"
     
-    # --- FLEXIBLE FILTER: Case-insensitive wildcard for tree basin records ---
     where_clause = f"closed_date > '{eighteen_months_ago}' AND agency_responsible LIKE '%PW%' AND lower(service_details) LIKE '%empty%tree%basin%'"
 
     if district_id != "Citywide":
@@ -224,9 +219,21 @@ def get_category(note):
 # --- 5. MAIN APP ---
 
 def main():
-    st.header("SF Tree Basin Maintenance Tracker")
+    # --- HERO SECTION & ADVOCACY MESSAGING ---
+    st.title("A Fair Share of Trees for Every Neighborhood")
     
-    # --- Filter Logic ---
+    st.markdown("""
+    <div class="hero-text">
+        Have you noticed the empty tree wells on our streets? Each is a sign of a city-wide inequity that leaves our most vulnerable communities with concrete instead of trees. In San Francisco, some neighborhoods enjoy lush canopies of over 20%, while others like SOMA, Bayview, and Nob Hill are left with less than 5%. 
+        <br><br>
+        Empty wells are more than just eyesores. They are active tripping hazards that attract litter and have resulted in costly lawsuits for the city. This tracker holds the city accountable for addressing these empty tree wells.
+    </div>
+    """, unsafe_allow_html=True)
+    
+    st.info("**Take Action:** Over 820 residents have already signed the petition demanding Tree Equity. **[Join them and sign the petition today!](https://fairtrees.org/petition)**", icon="✍️")
+    st.markdown("---")
+    
+    # --- FILTER LOGIC ---
     query_params = st.query_params
     url_district = query_params.get("district", "Citywide")
     district_list = ["Citywide"] + list(SUPERVISOR_MAP.values())
@@ -234,58 +241,68 @@ def main():
     current_sel = SUPERVISOR_MAP.get(url_district, "Citywide")
     if current_sel not in district_list: current_sel = "Citywide"
     
-    col_filter, _ = st.columns([1, 3])
+    st.markdown("### Filter 311 Reports")
+    col_filter, _ = st.columns([1, 2])
     with col_filter:
-        selected_label = st.selectbox("Supervisor District:", district_list, index=district_list.index(current_sel))
+        selected_label = st.selectbox("Select Supervisor District:", district_list, index=district_list.index(current_sel))
 
     rev_map = {v: k for k, v in SUPERVISOR_MAP.items()}
     rev_map["Citywide"] = "Citywide"
     selected_id = rev_map[selected_label]
     st.query_params["district"] = selected_id
 
-    # --- Load Data (Friendly Name) ---
+    # --- LOAD DATA ---
     df = load_tree_tickets(selected_id)
 
     if df.empty:
-        st.warning(f"No records found for {selected_label}.")
+        st.success(f"No recent empty tree basin reports found for {selected_label}. Help us find them and report them to 311!")
         return
 
-    # --- 1. STATISTICS ---
-    unique_cases_df = df.drop_duplicates(subset=['service_request_id'])
+    # --- 1. STATISTICS & METRICS ---
+    unique_cases_df = df.drop_duplicates(subset=['service_request_id']).copy()
     unique_count = len(unique_cases_df)
     
     if unique_count > 0:
         unique_cases_df['closure_reason'] = unique_cases_df['status_notes'].apply(get_category)
         stats = unique_cases_df['closure_reason'].value_counts().reset_index()
-        stats.columns = ['Closure Reason', 'Count']
-        stats['Percentage'] = (stats['Count'] / unique_count) * 100
+        stats.columns = ['Closure Reason', 'Total Tickets']
+        
+        # Rounded Percentages
+        stats['Percentage'] = ((stats['Total Tickets'] / unique_count) * 100).round(0).astype(int).astype(str) + "%"
 
-        st.markdown(f"##### Closure Reasons ({selected_label})")
-        st.caption(f"Denominator: {unique_count:,} unique tickets.")
-        st.dataframe(stats, width=700, hide_index=True)
+        # Top Level Metrics
+        m1, m2, m3 = st.columns(3)
+        m1.metric("Total 311 Tickets", f"{unique_count:,}")
+        
+        # Get count of highest reason just as an example metric
+        top_reason = stats.iloc[0]['Closure Reason']
+        top_count = stats.iloc[0]['Total Tickets']
+        m2.metric(f"Most Common Result", top_reason)
+        m3.metric(f"{top_reason} Tickets", f"{top_count:,}")
+
+        st.write("")
+        st.markdown(f"##### Breakdown of Closure Reasons ({selected_label})")
+        st.dataframe(stats, use_container_width=False, width=600, hide_index=True)
     
     st.markdown("---")
 
     # --- 2. IMAGE GALLERY ---
-    
-    display_df = df.dropna(subset=['media_url'])
+    display_df = df.dropna(subset=['media_url']).copy()
     display_df = display_df[~display_df['status_notes'].str.contains("duplicate", case=False, na=False)]
     
-    # Fix for drop_duplicates crashing on dicts: Convert to string first
     display_df['media_url_str'] = display_df['media_url'].astype(str)
     display_df = display_df.drop_duplicates(subset=['media_url_str'])
     
     if display_df.empty:
-        st.info("No images found.")
+        st.info("No images available for these reports.")
         return
 
     subset_df = display_df.head(100)
     image_count = len(subset_df)
-    st.markdown(f"#### 📸 Showing {image_count} recent cases with images")
+    st.markdown(f"### 📸 Visual Evidence")
+    st.caption(f"Showing the {image_count} most recent closed cases with attached images.")
+    st.write("")
 
-    # --- GRID LAYOUT FIX FOR MOBILE ---
-    # Loop row-by-row
-    
     COLS_PER_ROW = 4
     
     for i in range(0, len(subset_df), COLS_PER_ROW):
@@ -295,7 +312,6 @@ def main():
         for j, (index, row) in enumerate(row_chunk.iterrows()):
             raw = row['media_url']
             
-            # Sanitize Socrata Dicts
             image_url = None
             if isinstance(raw, dict):
                 image_url = raw.get('url', None)
@@ -304,27 +320,23 @@ def main():
                 
             if not image_url: continue
 
-            # Attempt Heist if Verint
             final_bytes = None
             if "verintcloudservices" in image_url:
                 final_bytes = fetch_verint_image_v3(image_url)
             
-            # Render Tile
             with cols[j]:
                 with st.container(border=True):
-                    # Use BYTES (st.image) or URL (HTML)
                     if final_bytes:
-                        st.image(final_bytes, width="stretch")
+                        st.image(final_bytes, use_container_width=True)
                     else:
-                        # Fallback HTML to prevent crashes on bad URLs
                         st.markdown(f'''
                             <img src="{image_url}" class="custom-img">
                         ''', unsafe_allow_html=True)
                         
                     opened = row['requested_datetime']
                     closed = row['closed_date']
-                    opened_str = opened.strftime('%m/%d/%y') if pd.notnull(opened) else "?"
-                    closed_str = closed.strftime('%m/%d/%y') if pd.notnull(closed) else "?"
+                    opened_str = opened.strftime('%b %d, %Y') if pd.notnull(opened) else "?"
+                    closed_str = closed.strftime('%b %d, %Y') if pd.notnull(closed) else "?"
                     days_diff = (closed - opened).days if (pd.notnull(opened) and pd.notnull(closed)) else "?"
                     
                     service = str(row['service_details']).replace('_', ' ').title()
@@ -335,7 +347,7 @@ def main():
 
                     st.markdown(f"""
                         <p class="card-text"><b><a href="{map_url}" target="_blank">{addr}</a></b></p>
-                        <p class="card-text" style="color: #9E9E9E;">{opened_str} ➔ {closed_str} ({days_diff} days)</p>
+                        <p class="card-text" style="color: #9E9E9E;">Opened: {opened_str} <br> Closed: {closed_str} ({days_diff} days)</p>
                         <p class="card-text">{service}</p>
                         <p class="note-text">Note: <a href="{ticket_url}" target="_blank">{notes}</a></p>
                     """, unsafe_allow_html=True)

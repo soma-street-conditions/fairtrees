@@ -232,7 +232,7 @@ def main():
     <div class="hero-text">
         Empty tree wells across San Francisco are more than just an eyesore—they are active tripping hazards that attract litter and debris. Unmaintained craters can be up to 9 inches deep in the pedestrian right-of-way, creating city-wide liability risks, including 48 trip-and-fall lawsuits served to the City Attorney's office in 2025 alone.
         <br><br>
-        <b>This community dashboard tracks 311 reports across all 11 Supervisor districts over the last 18 months.</b> By providing residents and city leaders with exact locations and photographic evidence, we can hold Public Works accountable and ensure urban forestry resources are directed where they are needed most.
+        <b>This community dashboard tracks 311 reports across all 11 Supervisor districts over the last 18 months.</b> By providing residents and city leaders with exact locations and photographic evidence, we can hold Public Works accountable to service delivery and the health of our urban forest.
     </div>
     """, unsafe_allow_html=True)
     

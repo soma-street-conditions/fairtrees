@@ -23,67 +23,44 @@ SUPERVISOR_MAP = {
 # --- 2. STYLING ---
 st.markdown("""
     <style>
-        /* System fonts for a clean, modern civic look */
-        html, body, [class*="css"] {
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-        }
-        
-        div[data-testid="stVerticalBlock"] > div { gap: 0.75rem; }
-        
-        .hero-title {
-            font-size: 2.4rem;
-            font-weight: 800;
-            color: #1B5E20; /* Deep authoritative green */
-            margin-bottom: 0.5rem;
-            letter-spacing: -0.5px;
-        }
+        div[data-testid="stVerticalBlock"] > div { gap: 0.5rem; }
         
         .hero-text {
-            font-size: 1.15rem;
+            font-size: 1.1rem;
             line-height: 1.6;
             margin-bottom: 1rem;
-            font-weight: 400;
-        }
-        
-        .card-container {
-            border: 1px solid rgba(128, 128, 128, 0.2);
-            border-radius: 8px;
-            padding: 10px;
-            background-color: rgba(128, 128, 128, 0.05);
-            height: 100%;
         }
         
         .card-text {
-            font-size: 14px;
+            font-family: "Source Sans Pro", sans-serif;
+            font-size: 13px;
             line-height: 1.4;
-            margin: 4px 0px;
+            margin: 0px;
         }
-        
         .note-text {
-            font-size: 12px;
-            line-height: 1.3;
-            margin-top: 8px;
-            padding-top: 8px;
-            border-top: 1px solid rgba(128, 128, 128, 0.2);
+            font-family: "Source Sans Pro", sans-serif;
+            font-size: 11px;
+            line-height: 1.2;
+            margin-top: 4px;
             opacity: 0.8;
         }
         
         div[data-testid="stImage"] > img {
             object-fit: cover; 
-            height: 200px; 
+            height: 180px; 
             width: 100%;
-            border-radius: 6px;
+            border-radius: 4px;
         }
         
         .custom-img {
             object-fit: cover; 
-            height: 200px; 
+            height: 180px; 
             width: 100%; 
-            border-radius: 6px; 
+            border-radius: 4px; 
         }
         
-        a { color: #2E7D32; text-decoration: none; font-weight: 600;}
-        a:hover { text-decoration: underline; color: #1B5E20;}
+        a { text-decoration: none; }
+        a:hover { text-decoration: underline; }
     </style>
 """, unsafe_allow_html=True)
 
@@ -198,7 +175,6 @@ def fetch_verint_image_v3(wrapper_url):
 # --- 4. DATA LOADING ---
 @st.cache_data(ttl=600, show_spinner="Loading Tree Tickets...")
 def load_tree_tickets(district_id):
-    # Fixed to 18 months (548 days)
     eighteen_months_ago = (datetime.now() - timedelta(days=548)).strftime('%Y-%m-%dT%H:%M:%S')
     
     select_cols = "service_request_id, requested_datetime, closed_date, service_details, status_notes, address, media_url, supervisor_district"
@@ -242,29 +218,17 @@ def get_category(note):
 
 def main():
     # --- HERO SECTION & ADVOCACY MESSAGING ---
-    st.markdown('<div class="hero-title">San Francisco Empty Tree Basin Tracker</div>', unsafe_allow_html=True)
+    st.title("San Francisco Empty Tree Basin Tracker")
     
-    col_text, col_alert = st.columns([1.5, 1])
+    st.markdown("""
+    <div class="hero-text">
+        Empty tree wells across San Francisco are more than just an eyesore—they are active tripping hazards that attract litter and debris. Unmaintained craters can be up to 9 inches deep in the pedestrian right-of-way, creating city-wide liability risks, including 48 trip-and-fall lawsuits served to the City Attorney's office in 2025 alone.
+        <br><br>
+        <b>This community dashboard tracks 311 reports across all 11 Supervisor districts over the last 18 months.</b> By providing residents and city leaders with exact locations and photographic evidence, we can hold Public Works accountable and ensure urban forestry resources are directed where they are needed most.
+    </div>
+    """, unsafe_allow_html=True)
     
-    with col_text:
-        st.markdown("""
-        <div class="hero-text">
-            Empty tree wells across San Francisco are more than just an eyesore—they are active tripping hazards that attract litter and debris. Many of these neglected spaces sit sunken deeply below the pavement, leaving our communities with hazardous concrete instead of trees.
-            <br><br>
-            <b>This community dashboard tracks 311 reports across all 11 Supervisor districts over the last 18 months.</b> By providing residents and city leaders with exact locations and photographic evidence, we can hold Public Works accountable and ensure urban forestry resources are directed where they are needed most.
-        </div>
-        """, unsafe_allow_html=True)
-        st.info("**Take Action:** Over 820 residents have signed the petition demanding Tree Equity. **[Sign the petition today!](https://fairtrees.org/)**", icon="✍️")
-
-    with col_alert:
-        st.error("""
-        **⚠️ City-Wide Liability Risk**
-        
-        Empty tree wells can create unmaintained craters up to **9 inches deep** in the pedestrian right-of-way. 
-        
-        In 2025 alone, the City Attorney's office was served with **48 trip-and-fall lawsuits**, including cases specifically citing hazardous tree wells. This tracker monitors these neglected spaces to demand a cleaner, safer city.
-        """, icon="🚨")
-
+    st.info("**Take Action:** Over 820 residents have already signed the petition demanding Tree Equity. **[Join them and sign the petition today!](https://fairtrees.org/)**", icon="✍️")
     st.markdown("---")
     
     # --- FILTER LOGIC ---
@@ -275,9 +239,10 @@ def main():
     current_sel = SUPERVISOR_MAP.get(url_district, "Citywide")
     if current_sel not in district_list: current_sel = "Citywide"
     
+    st.markdown("### Filter Hazards by Supervisor District")
     col_filter, _ = st.columns([1, 2])
     with col_filter:
-        selected_label = st.selectbox("🎯 Filter Hazards by Supervisor District:", district_list, index=district_list.index(current_sel))
+        selected_label = st.selectbox("Select Supervisor District:", district_list, index=district_list.index(current_sel), label_visibility="collapsed")
 
     rev_map = {v: k for k, v in SUPERVISOR_MAP.items()}
     rev_map["Citywide"] = "Citywide"
@@ -302,18 +267,19 @@ def main():
         
         stats['Percentage'] = ((stats['Total Tickets'] / unique_count) * 100).round(0).astype(int).astype(str) + "%"
 
-        st.markdown(f"### Accountability Metrics: District {selected_id if selected_id != 'Citywide' else 'Overview'} (Past 18 Months)")
+        st.markdown(f"#### Accountability Metrics: District {selected_id if selected_id != 'Citywide' else 'Overview'} (Past 18 Months)")
         
         m1, m2, m3 = st.columns(3)
-        m1.metric("Total Hazardous Wells Reported", f"{unique_count:,}", help="Total unique 311 tickets filed for empty basins over the last 18 months.")
+        m1.metric("Total Hazardous Wells Reported", f"{unique_count:,}")
         
         top_reason = stats.iloc[0]['Closure Reason']
         top_count = stats.iloc[0]['Total Tickets']
-        m2.metric(f"Most Common 311 Response", top_reason)
+        m2.metric(f"Most Common Result", top_reason)
         m3.metric(f"Tickets Marked '{top_reason}'", f"{top_count:,}")
 
-        with st.expander("View Full Breakdown of 311 Responses"):
-            st.dataframe(stats, use_container_width=True, hide_index=True)
+        st.write("")
+        st.markdown(f"##### Full Breakdown of 311 Responses")
+        st.dataframe(stats, use_container_width=False, width=600, hide_index=True)
     
     st.markdown("---")
 
@@ -332,7 +298,7 @@ def main():
     image_count = len(subset_df)
     
     st.markdown(f"### 📸 Visual Evidence of Neglect")
-    st.caption(f"Displaying the {image_count} most recent photographic reports filed with 311.")
+    st.caption(f"Showing the {image_count} most recent closed cases with attached images.")
     st.write("")
 
     COLS_PER_ROW = 4
@@ -357,29 +323,32 @@ def main():
                 final_bytes = fetch_verint_image_v3(image_url)
             
             with cols[j]:
-                st.markdown('<div class="card-container">', unsafe_allow_html=True)
-                if final_bytes:
-                    st.image(final_bytes, use_container_width=True)
-                else:
-                    st.markdown(f'<img src="{image_url}" class="custom-img">', unsafe_allow_html=True)
+                with st.container(border=True):
+                    if final_bytes:
+                        st.image(final_bytes, use_container_width=True)
+                    else:
+                        st.markdown(f'''
+                            <img src="{image_url}" class="custom-img">
+                        ''', unsafe_allow_html=True)
+                        
+                    opened = row['requested_datetime']
+                    closed = row['closed_date']
+                    opened_str = opened.strftime('%b %d, %Y') if pd.notnull(opened) else "?"
+                    closed_str = closed.strftime('%b %d, %Y') if pd.notnull(closed) else "?"
+                    days_diff = (closed - opened).days if (pd.notnull(opened) and pd.notnull(closed)) else "?"
                     
-                opened = row['requested_datetime']
-                closed = row['closed_date']
-                opened_str = opened.strftime('%b %d, %Y') if pd.notnull(opened) else "?"
-                closed_str = closed.strftime('%b %d, %Y') if pd.notnull(closed) else "?"
-                days_diff = (closed - opened).days if (pd.notnull(opened) and pd.notnull(closed)) else "?"
-                
-                notes = str(row['status_notes'])
-                addr = str(row['address']).split(',')[0]
-                map_url = f"https://www.google.com/maps/search/?api=1&query={addr.replace(' ', '+')}+San+Francisco"
-                ticket_url = f"https://mobile311.sfgov.org/tickets/{row['service_request_id']}"
+                    service = str(row['service_details']).replace('_', ' ').title()
+                    notes = str(row['status_notes'])
+                    addr = str(row['address']).split(',')[0]
+                    map_url = f"https://www.google.com/maps/search/?api=1&query={addr.replace(' ', '+')}+San+Francisco"
+                    ticket_url = f"https://mobile311.sfgov.org/tickets/{row['service_request_id']}"
 
-                st.markdown(f"""
-                    <p class="card-text">📍 <b><a href="{map_url}" target="_blank">{addr}</a></b></p>
-                    <p class="card-text">⏱️ Open for {days_diff} days</p>
-                    <p class="note-text"><b>311 Note:</b> <a href="{ticket_url}" target="_blank">{notes}</a></p>
-                """, unsafe_allow_html=True)
-                st.markdown('</div>', unsafe_allow_html=True)
+                    st.markdown(f"""
+                        <p class="card-text"><b><a href="{map_url}" target="_blank">{addr}</a></b></p>
+                        <p class="card-text" style="opacity: 0.8;">Opened: {opened_str} <br> Closed: {closed_str} ({days_diff} days)</p>
+                        <p class="card-text">{service}</p>
+                        <p class="note-text">Note: <a href="{ticket_url}" target="_blank">{notes}</a></p>
+                    """, unsafe_allow_html=True)
 
     # --- 3. FOOTER ---
     st.markdown("---")
@@ -387,6 +356,7 @@ def main():
         **Methodology & Sources:**
         * **Data Source:** [SF Open Data - 311 Cases](https://data.sfgov.org/City-Infrastructure/311-Cases/vw6y-z8j6)
         * **Image Resolution:** Protected Verint images are securely resolved via direct session handshake.
+        * **Filtering:** Duplicate cases (text-based) are excluded from the image feed but included in statistics.
         * **Date Range:** Showing records from the last 18 months.
     """)
 

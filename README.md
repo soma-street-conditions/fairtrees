@@ -81,6 +81,22 @@ npm run deploy
 To serve it from `fairtrees.org`, add the domain as a Custom Domain on the Worker
 (Cloudflare dashboard → Workers & Pages → fairtrees → Settings → Domains & Routes).
 
+### If you deploy by connecting the repo to Cloudflare
+
+Cloudflare's Git integration builds your repository's **default branch**. If this
+code is still on a feature branch, the build finds no `wrangler.toml` and fails,
+leaving the Worker on its "Hello world" placeholder. Either merge to the default
+branch, or set the build branch under
+Workers & Pages → fairtrees → Settings → Build.
+
+Build settings that work:
+
+| Setting | Value |
+|---|---|
+| Build command | *(leave empty)* — or `npm run build`, which is a no-op |
+| Deploy command | `npx wrangler deploy` |
+| Root directory | *(leave empty)* |
+
 ### Optional: durable photo storage with R2
 
 Photographs work without R2 — they are resolved on demand and cached at the edge.

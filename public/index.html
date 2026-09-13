@@ -1,0 +1,282 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Empty Tree Basin Tracker — FairTrees.org</title>
+<meta name="description" content="Every empty street-tree basin reported to San Francisco 311, with photographic evidence, filterable by supervisor district and neighborhood.">
+<meta name="color-scheme" content="light dark">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🌳</text></svg>">
+<link rel="stylesheet" href="/styles.css">
+<link rel="preload" href="/api/cases" as="fetch" crossorigin>
+<meta property="og:title" content="SF Empty Tree Basin Tracker">
+<meta property="og:description" content="Photographic evidence of empty street-tree basins across all 11 San Francisco supervisor districts.">
+<meta property="og:type" content="website">
+</head>
+<body>
+
+<a class="skip-link" href="#results">Skip to results</a>
+
+<header class="masthead">
+  <div class="wrap masthead-inner">
+    <a class="brand" href="/">
+      <span class="brand-mark" aria-hidden="true">🌳</span>
+      <span class="brand-text"><b>FairTrees</b><span class="brand-sub">Empty Basin Tracker</span></span>
+    </a>
+    <nav class="masthead-nav">
+      <a href="#results">Evidence</a>
+      <a href="#breakdown">Outcomes</a>
+      <a href="#method">Method</a>
+      <a class="btn btn-primary" href="https://fairtrees.org/" target="_blank" rel="noopener">Sign the petition</a>
+    </nav>
+    <button class="theme-toggle" type="button" aria-label="Switch colour theme" title="Switch colour theme">
+      <svg viewBox="0 0 24 24" width="17" height="17" aria-hidden="true" focusable="false">
+        <circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="2"/>
+        <path d="M12 3a9 9 0 0 0 0 18Z" fill="currentColor"/>
+      </svg>
+    </button>
+  </div>
+</header>
+
+<main>
+  <section class="hero">
+    <div class="wrap hero-inner">
+      <h1>San Francisco's empty tree basins, on the record.</h1>
+      <p class="lede">
+        An empty tree well is not just a gap in the canopy. These are open craters in the
+        pedestrian right-of-way — up to a foot deep — that collect litter, trap water, and
+        trip people. Every one of them was reported to 311 by a resident.
+      </p>
+      <p class="lede lede-muted">
+        This tracker pulls every <b>empty tree basin</b> report from San Francisco's open
+        311 data and puts the photographs beside the outcome, so residents and city
+        leaders can see what actually happened after the report was filed.
+      </p>
+      <div class="hero-actions">
+        <a class="btn btn-primary btn-lg" href="https://fairtrees.org/" target="_blank" rel="noopener">
+          Sign the Tree Equity petition
+        </a>
+        <a class="btn btn-ghost btn-lg" href="#results">See the evidence ↓</a>
+      </div>
+    </div>
+  </section>
+
+  <!-- Headline figures. These respond to the active filters. -->
+  <section class="wrap stats-section" aria-label="Summary statistics">
+    <div class="stats" id="stats"></div>
+    <p class="stats-scope" id="statsScope"></p>
+  </section>
+
+  <section class="filters-section" id="filters">
+    <div class="wrap">
+      <div class="filters" role="group" aria-label="Filter reports">
+        <div class="field field-grow">
+          <label for="fSearch">Search address or note</label>
+          <input type="search" id="fSearch" placeholder="e.g. Valencia St" autocomplete="off" spellcheck="false">
+        </div>
+        <div class="field">
+          <label for="fDistrict">Supervisor district</label>
+          <select id="fDistrict"><option value="">All districts</option></select>
+        </div>
+        <div class="field">
+          <label for="fNeighborhood">Neighborhood</label>
+          <select id="fNeighborhood"><option value="">All neighborhoods</option></select>
+        </div>
+        <div class="field">
+          <label for="fStatus">Status</label>
+          <select id="fStatus">
+            <option value="">Open and closed</option>
+            <option value="open">Still open</option>
+            <option value="closed">Closed</option>
+          </select>
+        </div>
+        <div class="field">
+          <label for="fReason">Outcome</label>
+          <select id="fReason"><option value="">Any outcome</option></select>
+        </div>
+        <div class="field">
+          <label for="fSince">Reported</label>
+          <select id="fSince">
+            <option value="">Any time</option>
+            <option value="90">Last 90 days</option>
+            <option value="365">Last year</option>
+            <option value="548" selected>Last 18 months</option>
+            <option value="1095">Last 3 years</option>
+          </select>
+        </div>
+        <div class="field">
+          <label for="fSort">Sort</label>
+          <select id="fSort">
+            <option value="newest">Newest report</option>
+            <option value="oldest">Oldest report</option>
+            <option value="longest">Longest unresolved</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="filters-foot">
+        <label class="check">
+          <input type="checkbox" id="fPhotos" checked>
+          <span>Only reports with a photograph</span>
+        </label>
+        <div class="view-switch" role="tablist" aria-label="View">
+          <button type="button" role="tab" aria-selected="true" data-view="grid">Photos</button>
+          <button type="button" role="tab" aria-selected="false" data-view="map">Map</button>
+          <button type="button" role="tab" aria-selected="false" data-view="table">Table</button>
+        </div>
+        <button type="button" class="btn btn-ghost btn-sm" id="fReset">Reset filters</button>
+      </div>
+    </div>
+  </section>
+
+  <section class="wrap results-section" id="results">
+    <div class="results-head">
+      <h2 id="resultsTitle">Visual evidence</h2>
+      <p class="results-count" id="resultsCount" role="status" aria-live="polite"></p>
+    </div>
+
+    <div id="viewGrid" class="view">
+      <div class="gallery" id="gallery"></div>
+      <div class="sentinel" id="sentinel" aria-hidden="true"></div>
+      <div class="gallery-more">
+        <p class="loading-more" id="loadingMore" hidden>Loading more…</p>
+        <button type="button" class="btn btn-ghost" id="showMore" hidden></button>
+        <p class="loading-more" id="allShown" hidden>That's every matching report.</p>
+      </div>
+    </div>
+
+    <div id="viewMap" class="view" hidden>
+      <div id="map" class="map" role="application" aria-label="Map of reported empty tree basins"></div>
+      <p class="map-note">
+        Circles mark individual reports.
+        <span class="dot dot-open" aria-hidden="true"></span> still open ·
+        <span class="dot dot-closed" aria-hidden="true"></span> closed.
+        224 reports filed at intersections carry no coordinates and cannot be mapped.
+      </p>
+    </div>
+
+    <div id="viewTable" class="view" hidden>
+      <div class="table-scroll">
+        <table class="data-table" id="dataTable">
+          <caption class="sr-only">Empty tree basin reports matching the current filters</caption>
+          <thead>
+            <tr>
+              <th scope="col">Location</th><th scope="col">District</th>
+              <th scope="col">Neighborhood</th><th scope="col">Reported</th>
+              <th scope="col">Closed</th><th scope="col">Days</th>
+              <th scope="col">Outcome</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+      <p class="loading-more" id="tableMore" hidden>Showing first 500 rows — narrow the filters to see more.</p>
+    </div>
+
+    <div class="empty" id="empty" hidden>
+      <p class="empty-title">No reports match these filters.</p>
+      <p>Try widening the date range, or clearing the neighborhood filter.</p>
+      <button type="button" class="btn btn-ghost" data-reset>Reset filters</button>
+    </div>
+  </section>
+
+  <section class="wrap breakdown-section" id="breakdown">
+    <h2>What happened to these reports</h2>
+    <p class="section-lede">
+      How 311 recorded the resolution of every matching report, grouped from the closure
+      note City staff typed. A closed ticket does not mean a tree was planted — and a
+      report with no planting recorded is a statement about the record, not proof that
+      nothing was done. See the note on record-keeping below.
+    </p>
+    <div class="breakdown" id="breakdownChart"></div>
+  </section>
+
+  <section class="wrap method-section" id="method">
+    <h2>Method and sources</h2>
+    <div class="method-grid">
+      <div>
+        <h3>Where the data comes from</h3>
+        <p>
+          Every record is a real 311 service request from the City's
+          <a href="https://data.sfgov.org/City-Infrastructure/311-Cases/vw6y-z8j6" target="_blank" rel="noopener">311 Cases</a>
+          dataset, filtered to requests whose service detail is <code>EMPTY_TREE_BASIN</code>.
+          Supervisor district and neighborhood boundaries come from the City's
+          <a href="https://data.sf.gov/resource/cqbw-m5m3.geojson" target="_blank" rel="noopener">district</a> and
+          <a href="https://data.sf.gov/resource/j2bu-swwd.geojson" target="_blank" rel="noopener">neighborhood</a> files,
+          so supervisor names stay current without anyone editing this site.
+        </p>
+      </div>
+      <div>
+        <h3>About the photographs</h3>
+        <p>
+          Photos submitted with a 311 report are held in the City's Verint portal, which does
+          not serve them as plain images. They are unwrapped server-side, then cached, so the
+          page does not stall while they load. A small number of older reports link to
+          social-media posts or retired photo pages that no longer resolve; those are counted
+          as reports but not shown as photographs.
+        </p>
+      </div>
+      <div>
+        <h3>How closure notes changed over time</h3>
+        <p>
+          This is the most important caveat on the page. Before roughly 2015, Public Works
+          recorded detailed closure notes that often named the action taken — including
+          explicit plantings. Modern records are far terser: almost every report closed in
+          the last 18 months carries only <i>“Cancelled&nbsp;— Planned Maintenance”</i>.
+          So <b>“no planting recorded” means exactly that</b> — the 311 record shows no
+          planting — and is not by itself proof that no tree was planted. It is evidence
+          about the City's record-keeping as much as about its tree planting, and the
+          honest reading is that residents cannot tell from the public record what happened
+          to their report.
+        </p>
+      </div>
+      <div>
+        <h3>Counting rules</h3>
+        <p>
+          Reports are de-duplicated by service request ID. “Days” is the gap between the
+          report date and the closing date; for reports still open it is counted to today.
+          Outcome labels are grouped from the free-text closure note 311 staff entered, so
+          they are an interpretation of that text, not an official category.
+        </p>
+      </div>
+      <div>
+        <h3>Corrections</h3>
+        <p>
+          If a record looks wrong, the underlying 311 ticket is linked from every card and
+          table row — that ticket, not this page, is the source of truth. Data refreshes
+          automatically; the timestamp below shows the last successful pull.
+        </p>
+      </div>
+    </div>
+    <p class="updated" id="updated"></p>
+  </section>
+</main>
+
+<footer class="footer">
+  <div class="wrap footer-inner">
+    <p>
+      <b>FairTrees.org</b> — a community project for street-tree equity in San Francisco.
+      Not affiliated with the City and County of San Francisco.
+    </p>
+    <p class="footer-links">
+      <a href="https://fairtrees.org/" target="_blank" rel="noopener">Petition</a>
+      <a href="https://data.sfgov.org/City-Infrastructure/311-Cases/vw6y-z8j6" target="_blank" rel="noopener">Source data</a>
+      <a href="https://sf.gov/report-problem-street-tree" target="_blank" rel="noopener">Report a basin to 311</a>
+    </p>
+  </div>
+</footer>
+
+<!-- Photo lightbox -->
+<dialog class="lightbox" id="lightbox" aria-label="Photograph detail">
+  <button type="button" class="lightbox-close" aria-label="Close">✕</button>
+  <button type="button" class="lightbox-nav lightbox-prev" aria-label="Previous photograph">‹</button>
+  <button type="button" class="lightbox-nav lightbox-next" aria-label="Next photograph">›</button>
+  <figure class="lightbox-figure">
+    <img id="lightboxImg" alt="">
+    <figcaption id="lightboxCaption"></figcaption>
+  </figure>
+</dialog>
+
+<script src="/app.js" type="module"></script>
+</body>
+</html>

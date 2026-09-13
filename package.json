@@ -1,0 +1,17 @@
+{
+  "name": "fairtrees",
+  "version": "2.0.0",
+  "private": true,
+  "description": "Tracker for empty street-tree basins reported to SF 311",
+  "type": "module",
+  "scripts": {
+    "data": "node scripts/build-data.mjs",
+    "build": "echo \"No build step required: public/ is served as-is.\"",
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "test": "node --test test/*.test.mjs"
+  },
+  "devDependencies": {
+    "wrangler": "^4.131.0"
+  }
+}

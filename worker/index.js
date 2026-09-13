@@ -298,13 +298,38 @@ export default {
       return new Response("Method not allowed", { status: 405, headers: { Allow: "GET, HEAD" } });
     }
 
-    if (url.pathname === "/api/cases") return handleCases(request, env, ctx);
+    // Serving under a path (e.g. a Worker route on fairtrees.org/tracker*) means
+    // requests arrive prefixed. Strip the prefix so routing and asset lookup are
+    // written against the site root either way.
+    const base = (env.BASE_PATH || "").replace(/\/+$/, "");
+    if (base) {
+      if (url.pathname === base) {
+        // Without the trailing slash the page has no directory to resolve its
+        // relative asset URLs against, so send it to the canonical form.
+        return Response.redirect(`${url.origin}${base}/${url.search}`, 301);
+      }
+      if (url.pathname.startsWith(`${base}/`)) {
+        url.pathname = url.pathname.slice(base.length) || "/";
+      } else {
+        return new Response("Not found", { status: 404 });
+      }
+    }
+
+    // Downstream handlers (cache keys, asset lookups) all use this rewritten URL.
+    const inner = new Request(url.toString(), request);
+
+    if (url.pathname === "/api/cases") return handleCases(inner, env, ctx);
 
     const photo = url.pathname.match(/^\/api\/photo\/([^/]+)\/([^/]+)$/);
-    if (photo) return handlePhoto(request, env, ctx, photo[1], photo[2]);
+    if (photo) return handlePhoto(inner, env, ctx, photo[1], photo[2]);
 
     if (url.pathname === "/api/health") {
-      return json({ ok: true, r2: Boolean(env.PHOTOS), time: new Date().toISOString() });
+      return json({
+        ok: true,
+        r2: Boolean(env.PHOTOS),
+        basePath: base || "/",
+        time: new Date().toISOString(),
+      });
     }
 
     // An unmatched /api/ path is a client error, not a page — don't let it fall
@@ -313,7 +338,7 @@ export default {
       return json({ error: "Unknown endpoint" }, { status: 404 });
     }
 
-    return env.ASSETS.fetch(request);
+    return env.ASSETS.fetch(inner);
   },
 
   async scheduled(event, env, ctx) {

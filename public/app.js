@@ -20,10 +20,18 @@ const AUTO_LOAD_MAX = 96;
 const TABLE_LIMIT = 500;
 
 const el = (id) => document.getElementById(id);
+
+/**
+ * Every same-origin URL is resolved against the document's own directory, so the
+ * site works unchanged at the root or under a path such as /tracker/. The Worker
+ * redirects /tracker to /tracker/ so this always has a directory to resolve from.
+ */
+const url = (path) => new URL(path, document.baseURI).toString();
 const fmt = new Intl.NumberFormat("en-US");
 
 const state = {
   cases: [],
+  boundaryLayers: null,
   matching: [],
   meta: { districts: [], neighborhoods: [] },
   filtered: [],
@@ -71,7 +79,7 @@ function photoSrc(token) {
   if (!token) return null;
   if (token.startsWith("v:")) {
     const [caseid, formref] = token.slice(2).split(":");
-    return `/api/photo/${encodeURIComponent(caseid)}/${encodeURIComponent(formref)}`;
+    return url(`api/photo/${encodeURIComponent(caseid)}/${encodeURIComponent(formref)}`);
   }
   return token;
 }
@@ -120,7 +128,7 @@ function writeUrl() {
   }
   if (!controls.photos.checked) params.set("photos", "0");
   const qs = params.toString();
-  history.replaceState(null, "", qs ? `?${qs}` : location.pathname);
+  history.replaceState(null, "", qs ? `?${qs}` : location.pathname);  // path preserved
 }
 
 /* -------------------------------- filtering -------------------------------- */
@@ -410,11 +418,11 @@ function loadLeaflet() {
   leafletPromise = new Promise((resolve, reject) => {
     const css = document.createElement("link");
     css.rel = "stylesheet";
-    css.href = "/vendor/leaflet/leaflet.css";
+    css.href = url("vendor/leaflet/leaflet.css");
     document.head.append(css);
 
     const script = document.createElement("script");
-    script.src = "/vendor/leaflet/leaflet.js";
+    script.src = url("vendor/leaflet/leaflet.js");
     script.onload = () => (window.L ? resolve(window.L) : reject(new Error("Leaflet did not initialise")));
     script.onerror = () => reject(new Error("Leaflet failed to load"));
     document.head.append(script);
@@ -422,12 +430,49 @@ function loadLeaflet() {
   return leafletPromise;
 }
 
+let boundariesPromise = null;
+
+/** Districts and neighborhoods, simplified at build time. ~19 KB gzipped. */
+function loadBoundaries() {
+  if (!boundariesPromise) {
+    boundariesPromise = fetch(url("data/boundaries.json"))
+      .then((r) => (r.ok ? r.json() : null))
+      .catch(() => null);
+  }
+  return boundariesPromise;
+}
+
+function boundaryStyle(active) {
+  return active
+    ? { color: "#1b5e45", weight: 2.5, opacity: 0.95, fill: true, fillColor: "#1b5e45", fillOpacity: 0.07 }
+    : { color: "#8d8b85", weight: 1, opacity: 0.5, fill: false };
+}
+
+/**
+ * Restyle rather than redraw: the selected district or neighborhood is outlined
+ * so the dots are read against the boundary the filters are talking about.
+ */
+function styleBoundaries() {
+  if (!state.boundaryLayers) return;
+  const district = controls.district.value;
+  const neighborhood = controls.neighborhood.value;
+  for (const { layer, kind, key } of state.boundaryLayers) {
+    const active =
+      (kind === "district" && district && key === district) ||
+      (kind === "neighborhood" && neighborhood && key === neighborhood);
+    // Neighborhood outlines only appear when one is selected; all 41 at once is noise.
+    const visible = kind === "district" || active;
+    layer.setStyle(visible ? boundaryStyle(active) : { opacity: 0, fill: false });
+  }
+}
+
 async function renderMap() {
   let L;
   try {
     L = await loadLeaflet();
   } catch {
-    el("map").innerHTML = `<p style="padding:20px;color:var(--ink-muted)">The map library could not be loaded. The photo and table views still work.</p>`;
+    el("map").innerHTML =
+      '<p style="padding:20px;color:var(--ink-muted)">The map library could not be loaded. The photo and table views still work.</p>';
     return;
   }
 
@@ -436,17 +481,44 @@ async function renderMap() {
     // thousand points, which is slow and memory-hungry as SVG.
     state.map = L.map("map", { scrollWheelZoom: false, preferCanvas: true })
       .setView([37.7749, -122.4294], 12);
-    // Basemap tiles are the one remaining third party. If they fail to load the
-    // markers still plot on a blank ground, so the view degrades rather than breaks.
-    L.tileLayer("https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png", {
-      attribution:
-        '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
-      maxZoom: 19,
-      crossOrigin: true,
-    }).addTo(state.map);
+
+    // A keyless basemap. CARTO's free tiles began demanding an API key and started
+    // returning watermarked images, so this one is drawn from Esri instead — and
+    // the district outlines below are served from our own origin, so the map still
+    // makes sense if this layer ever fails too.
+    L.tileLayer(
+      "https://services.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Base/MapServer/tile/{z}/{y}/{x}",
+      {
+        attribution:
+          'Tiles &copy; <a href="https://www.esri.com/">Esri</a> — Esri, HERE, Garmin, ' +
+          '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+        maxZoom: 18,
+      }
+    ).addTo(state.map);
+
+    state.boundaryGroup = L.layerGroup().addTo(state.map);
     state.markers = L.layerGroup().addTo(state.map);
+
+    const boundaries = await loadBoundaries();
+    if (boundaries) {
+      state.boundaryLayers = [];
+      for (const [kind, collection] of [
+        ["neighborhood", boundaries.neighborhoods],
+        ["district", boundaries.districts],
+      ]) {
+        for (const feature of collection.features) {
+          const key = kind === "district" ? feature.properties.id : feature.properties.name;
+          const layer = L.geoJSON(feature, {
+            style: boundaryStyle(false),
+            interactive: false,   // never steal a click from a report dot
+          }).addTo(state.boundaryGroup);
+          state.boundaryLayers.push({ layer, kind, key });
+        }
+      }
+    }
   }
 
+  styleBoundaries();
   state.markers.clearLayers();
   const points = state.filtered.filter((c) => c.lat !== null);
 
@@ -679,15 +751,15 @@ function restoreTheme() {
 
 async function loadData() {
   const [casesRes, metaRes] = await Promise.all([
-    fetch("/api/cases").catch(() => null),
-    fetch("/data/meta.json").catch(() => null),
+    fetch(url("api/cases")).catch(() => null),
+    fetch(url("data/meta.json")).catch(() => null),
   ]);
 
   let payload = casesRes?.ok ? await casesRes.json() : null;
   if (!payload?.cases) {
     // The Worker already falls back to the snapshot; this covers the Worker
     // itself being unreachable.
-    const snap = await fetch("/data/snapshot.json");
+    const snap = await fetch(url("data/snapshot.json"));
     payload = await snap.json();
   }
   state.cases = payload.cases || [];

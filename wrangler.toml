@@ -7,10 +7,27 @@ compatibility_date = "2026-09-01"
 [assets]
 directory = "./public"
 binding = "ASSETS"
-not_found_handling = "single-page-application"
+
+# The Worker runs before the asset server, and there is no client-side routing to
+# fall back for. Both matter when serving under a path: with the asset server
+# first, a request for "/tracker" is answered with index.html directly, the
+# Worker never gets to redirect it to "/tracker/", and every relative URL on the
+# page then resolves against the origin root instead of the site.
+run_worker_first = true
+not_found_handling = "none"
 
 [observability]
 enabled = true
+
+# Serve the site under a path instead of at the root of a hostname.
+#
+# Leave empty to serve at the root (e.g. tracker.fairtrees.org/). Set it to the
+# path when using a Worker route such as "fairtrees.org/tracker*", so the Worker
+# knows to strip that prefix:
+#
+#   BASE_PATH = "/tracker"
+[vars]
+BASE_PATH = ""
 
 # Fills the R2 photo archive in the background, once R2 is enabled.
 # Harmless to leave configured while R2 is off — the handler no-ops.

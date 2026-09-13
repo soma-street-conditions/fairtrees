@@ -98,6 +98,82 @@ function locate(index, lng, lat) {
   return null;
 }
 
+
+/* ---------- boundary simplification ---------- */
+
+/** Perpendicular distance from p to the segment ab, in degrees. */
+function segmentDistance(p, a, b) {
+  let [x, y] = a;
+  let dx = b[0] - x;
+  let dy = b[1] - y;
+  if (dx !== 0 || dy !== 0) {
+    const t = ((p[0] - x) * dx + (p[1] - y) * dy) / (dx * dx + dy * dy);
+    if (t > 1) [x, y] = b;
+    else if (t > 0) { x += dx * t; y += dy * t; }
+  }
+  return Math.hypot(p[0] - x, p[1] - y);
+}
+
+/** Douglas-Peucker. Keeps the shape, drops the survey-grade vertex count. */
+function simplifyRing(points, tolerance) {
+  if (points.length <= 4) return points;
+  let maxDist = 0;
+  let index = 0;
+  for (let i = 1; i < points.length - 1; i++) {
+    const d = segmentDistance(points[i], points[0], points[points.length - 1]);
+    if (d > maxDist) { maxDist = d; index = i; }
+  }
+  if (maxDist <= tolerance) return [points[0], points[points.length - 1]];
+  return [
+    ...simplifyRing(points.slice(0, index + 1), tolerance).slice(0, -1),
+    ...simplifyRing(points.slice(index), tolerance),
+  ];
+}
+
+const roundPoint = ([x, y]) => [Number(x.toFixed(5)), Number(y.toFixed(5))];
+
+function simplifyGeometry(geometry, tolerance) {
+  const ring = (r) => {
+    // A polygon ring must stay closed after simplification.
+    const simplified = simplifyRing(r.map(roundPoint), tolerance);
+    if (simplified.length < 4) return null;
+    const [first] = simplified;
+    const last = simplified[simplified.length - 1];
+    if (first[0] !== last[0] || first[1] !== last[1]) simplified.push(first);
+    return simplified;
+  };
+  const polygon = (rings) => rings.map(ring).filter(Boolean);
+
+  if (geometry.type === "Polygon") {
+    const rings = polygon(geometry.coordinates);
+    return rings.length ? { type: "Polygon", coordinates: rings } : null;
+  }
+  if (geometry.type === "MultiPolygon") {
+    const polys = geometry.coordinates.map(polygon).filter((p) => p.length);
+    return polys.length ? { type: "MultiPolygon", coordinates: polys } : null;
+  }
+  return null;
+}
+
+/**
+ * The map draws these itself rather than relying on a tile provider for the only
+ * geographic context. Tiles can start demanding an API key — CARTO did — and when
+ * that happens the districts and neighbourhoods still render.
+ */
+function boundaryCollection(features, nameOf, tolerance) {
+  return {
+    type: "FeatureCollection",
+    features: features
+      .filter((f) => f.geometry)
+      .map((f) => ({
+        type: "Feature",
+        properties: nameOf(f.properties),
+        geometry: simplifyGeometry(f.geometry, tolerance),
+      }))
+      .filter((f) => f.geometry),
+  };
+}
+
 async function main() {
   process.stderr.write("Fetching 311 cases...\n");
   const [rawRows, districtGeo, neighborhoodGeo] = await Promise.all([
@@ -138,7 +214,24 @@ async function main() {
     }))
     .sort((a, b) => Number(a.id) - Number(b.id));
 
+  // ~20 m of detail is plenty at city zoom and cuts the payload by an order of
+  // magnitude; the map lazy-loads this only when the map view is opened.
+  const TOLERANCE = 0.0002;
+  const boundaries = {
+    districts: boundaryCollection(
+      districtGeo.features,
+      (p) => ({ id: String(Number(p.sup_dist_num)), supervisor: p.sup_name }),
+      TOLERANCE
+    ),
+    neighborhoods: boundaryCollection(
+      neighborhoodGeo.features,
+      (p) => ({ name: p.nhood }),
+      TOLERANCE
+    ),
+  };
+
   await mkdir(resolve(ROOT, "public/data"), { recursive: true });
+  await writeFile(resolve(ROOT, "public/data/boundaries.json"), JSON.stringify(boundaries));
   await writeFile(
     resolve(ROOT, "public/data/snapshot.json"),
     JSON.stringify({
@@ -152,6 +245,18 @@ async function main() {
   await writeFile(
     resolve(ROOT, "public/data/meta.json"),
     JSON.stringify({ generated: new Date().toISOString(), districts, neighborhoods }, null, 2)
+  );
+
+  const countPoints = (fc) =>
+    fc.features.reduce((sum, f) => {
+      const walk = (n) => (typeof n[0] === "number" ? 1 : n.reduce((a, c) => a + walk(c), 0));
+      return sum + walk(f.geometry.coordinates);
+    }, 0);
+  process.stderr.write(
+    `  boundaries: ${boundaries.districts.features.length} districts ` +
+      `(${countPoints(boundaries.districts)} pts), ` +
+      `${boundaries.neighborhoods.features.length} neighborhoods ` +
+      `(${countPoints(boundaries.neighborhoods)} pts)\n`
   );
 
   const open = cases.filter((c) => c.s).length;

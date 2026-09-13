@@ -7,8 +7,8 @@
 <meta name="description" content="Every empty street-tree basin reported to San Francisco 311, with photographic evidence, filterable by supervisor district and neighborhood.">
 <meta name="color-scheme" content="light dark">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🌳</text></svg>">
-<link rel="stylesheet" href="/styles.css">
-<link rel="preload" href="/api/cases" as="fetch" crossorigin>
+<link rel="stylesheet" href="styles.css">
+<link rel="preload" href="api/cases" as="fetch" crossorigin>
 <meta property="og:title" content="SF Empty Tree Basin Tracker">
 <meta property="og:description" content="Photographic evidence of empty street-tree basins across all 11 San Francisco supervisor districts.">
 <meta property="og:type" content="website">
@@ -19,7 +19,7 @@
 
 <header class="masthead">
   <div class="wrap masthead-inner">
-    <a class="brand" href="/">
+    <a class="brand" href="./">
       <span class="brand-mark" aria-hidden="true">🌳</span>
       <span class="brand-text"><b>FairTrees</b><span class="brand-sub">Empty Basin Tracker</span></span>
     </a>
@@ -27,7 +27,7 @@
       <a href="#results">Evidence</a>
       <a href="#breakdown">Outcomes</a>
       <a href="#method">Method</a>
-      <a class="btn btn-primary" href="https://fairtrees.org/" target="_blank" rel="noopener">Sign the petition</a>
+      <a class="btn btn-primary" href="https://actionnetwork.org/petitions/fair-trees-sf" target="_blank" rel="noopener">Sign the petition</a>
     </nav>
     <button class="theme-toggle" type="button" aria-label="Switch colour theme" title="Switch colour theme">
       <svg viewBox="0 0 24 24" width="17" height="17" aria-hidden="true" focusable="false">
@@ -53,7 +53,7 @@
         leaders can see what actually happened after the report was filed.
       </p>
       <div class="hero-actions">
-        <a class="btn btn-primary btn-lg" href="https://fairtrees.org/" target="_blank" rel="noopener">
+        <a class="btn btn-primary btn-lg" href="https://actionnetwork.org/petitions/fair-trees-sf" target="_blank" rel="noopener">
           Sign the Tree Equity petition
         </a>
         <a class="btn btn-ghost btn-lg" href="#results">See the evidence ↓</a>
@@ -148,10 +148,12 @@
     <div id="viewMap" class="view" hidden>
       <div id="map" class="map" role="application" aria-label="Map of reported empty tree basins"></div>
       <p class="map-note">
-        Circles mark individual reports.
-        <span class="dot dot-open" aria-hidden="true"></span> still open ·
-        <span class="dot dot-closed" aria-hidden="true"></span> closed.
-        224 reports filed at intersections carry no coordinates and cannot be mapped.
+        Circles mark individual reports —
+        <span class="dot dot-open" aria-hidden="true"></span> still open,
+        <span class="dot dot-closed" aria-hidden="true"></span> closed. Supervisor district
+        outlines are drawn from the City's own boundary files; selecting a district or
+        neighborhood highlights it. Reports filed at an intersection carry no coordinates
+        in the 311 feed and cannot be mapped.
       </p>
     </div>
 
@@ -259,7 +261,8 @@
       Not affiliated with the City and County of San Francisco.
     </p>
     <p class="footer-links">
-      <a href="https://fairtrees.org/" target="_blank" rel="noopener">Petition</a>
+      <a href="https://actionnetwork.org/petitions/fair-trees-sf" target="_blank" rel="noopener">Sign the petition</a>
+      <a href="https://fairtrees.org/" target="_blank" rel="noopener">FairTrees campaign</a>
       <a href="https://data.sfgov.org/City-Infrastructure/311-Cases/vw6y-z8j6" target="_blank" rel="noopener">Source data</a>
       <a href="https://sf.gov/report-problem-street-tree" target="_blank" rel="noopener">Report a basin to 311</a>
     </p>
@@ -277,6 +280,6 @@
   </figure>
 </dialog>
 
-<script src="/app.js" type="module"></script>
+<script src="app.js" type="module"></script>
 </body>
 </html>

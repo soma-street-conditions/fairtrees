@@ -1,0 +1,88 @@
+{
+  "generated": "2026-09-13T07:16:53.188Z",
+  "districts": [
+    {
+      "id": "1",
+      "supervisor": "Connie Chan"
+    },
+    {
+      "id": "2",
+      "supervisor": "Stephen Sherrill"
+    },
+    {
+      "id": "3",
+      "supervisor": "Danny Sauter"
+    },
+    {
+      "id": "4",
+      "supervisor": "Alan Wong"
+    },
+    {
+      "id": "5",
+      "supervisor": "Bilal Mahmood"
+    },
+    {
+      "id": "6",
+      "supervisor": "Matt Dorsey"
+    },
+    {
+      "id": "7",
+      "supervisor": "Myrna Melgar"
+    },
+    {
+      "id": "8",
+      "supervisor": "Rafael Mandelman"
+    },
+    {
+      "id": "9",
+      "supervisor": "Jackie Fielder"
+    },
+    {
+      "id": "10",
+      "supervisor": "Shamann Walton"
+    },
+    {
+      "id": "11",
+      "supervisor": "Chyanne Chen"
+    }
+  ],
+  "neighborhoods": [
+    "Bayview Hunters Point",
+    "Bernal Heights",
+    "Castro/Upper Market",
+    "Chinatown",
+    "Excelsior",
+    "Financial District/South Beach",
+    "Glen Park",
+    "Golden Gate Park",
+    "Haight Ashbury",
+    "Hayes Valley",
+    "Inner Richmond",
+    "Inner Sunset",
+    "Japantown",
+    "Lone Mountain/USF",
+    "Marina",
+    "Mission",
+    "Mission Bay",
+    "Nob Hill",
+    "Noe Valley",
+    "North Beach",
+    "Oceanview/Merced/Ingleside",
+    "Outer Mission",
+    "Outer Richmond",
+    "Pacific Heights",
+    "Portola",
+    "Potrero Hill",
+    "Presidio Heights",
+    "Russian Hill",
+    "Seacliff",
+    "South of Market",
+    "Sunset/Parkside",
+    "Tenderloin",
+    "Treasure Island",
+    "Twin Peaks",
+    "Visitacion Valley",
+    "West of Twin Peaks",
+    "Western Addition"
+  ]
+}

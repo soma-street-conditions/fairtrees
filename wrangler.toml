@@ -1,0 +1,33 @@
+name = "fairtrees"
+main = "worker/index.js"
+compatibility_date = "2026-09-01"
+
+# Static site (HTML/CSS/JS and the data snapshot). The Worker only handles
+# /api/* and hands everything else to the asset server.
+[assets]
+directory = "./public"
+binding = "ASSETS"
+not_found_handling = "single-page-application"
+
+[observability]
+enabled = true
+
+# Fills the R2 photo archive in the background, once R2 is enabled.
+# Harmless to leave configured while R2 is off — the handler no-ops.
+[triggers]
+crons = ["17 */6 * * *"]
+
+# ---------------------------------------------------------------------------
+# Optional: durable photo archive.
+#
+# Photos work without this — they are resolved on demand and cached at the edge.
+# Enabling R2 makes them permanent and much faster:
+#
+#   1. Enable R2 once in the Cloudflare dashboard (R2 -> Overview). Free tier
+#      covers this project many times over.
+#   2. npx wrangler r2 bucket create fairtrees-photos
+#   3. Uncomment the three lines below and redeploy.
+# ---------------------------------------------------------------------------
+# [[r2_buckets]]
+# binding = "PHOTOS"
+# bucket_name = "fairtrees-photos"

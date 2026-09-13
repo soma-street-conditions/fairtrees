@@ -260,7 +260,7 @@ code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0
 
 /* ------------------------------- results ------------------------------ */
 
-.results-section { padding-block: 30px 10px; scroll-margin-top: 150px; }
+.results-section { padding-block: 30px 10px; scroll-margin-top: 285px; }
 .results-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px 16px; margin-bottom: 18px; }
 .results-head h2 { margin: 0; }
 .results-count { margin: 0; font-size: 0.9rem; color: var(--ink-muted); font-variant-numeric: tabular-nums; }
@@ -354,11 +354,11 @@ code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0
 
 /* ------------------------------ breakdown ----------------------------- */
 
-.breakdown-section { padding-block: clamp(34px, 5vw, 56px); scroll-margin-top: 140px; }
+.breakdown-section { padding-block: clamp(34px, 5vw, 56px); scroll-margin-top: 285px; }
 .section-lede { color: var(--ink-2); max-width: 66ch; }
 .breakdown { margin-top: 22px; display: flex; flex-direction: column; gap: 2px; }
 .bar-row {
-  display: grid; grid-template-columns: minmax(130px, 230px) 1fr auto;
+  display: grid; grid-template-columns: minmax(140px, 290px) 1fr auto;
   align-items: center; gap: 14px; padding: 5px 0;
 }
 .bar-label { font-size: 0.88rem; color: var(--ink-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -374,7 +374,7 @@ code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0
 
 /* -------------------------------- method ------------------------------- */
 
-.method-section { padding-block: clamp(30px, 4vw, 48px); border-top: 1px solid var(--rule); scroll-margin-top: 140px; }
+.method-section { padding-block: clamp(30px, 4vw, 48px); border-top: 1px solid var(--rule); scroll-margin-top: 285px; }
 .method-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 10px 34px; margin-top: 8px; }
 .method-grid p { font-size: 0.92rem; color: var(--ink-2); }
 .updated { font-size: 0.82rem; color: var(--ink-muted); margin-top: 18px; }
@@ -421,6 +421,21 @@ code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0
   .lightbox-nav { top: auto; bottom: 18px; transform: none; }
   .lightbox-prev { left: 24px; }
   .lightbox-next { right: 24px; }
+}
+
+/* ---------------------------- narrow screens ----------------------------
+   These override base rules of equal specificity, so they must come last. */
+
+@media (max-width: 860px) {
+  /* Stacked, the filter bar grows to roughly 400px — half a phone screen.
+     Pinning that costs more than it saves, and it would bury anchor targets
+     underneath it, so below this width it scrolls away with the page. */
+  .filters-section { position: static; }
+
+  /* Only the masthead stays pinned, so anchors need to clear just that. */
+  .results-section,
+  .breakdown-section,
+  .method-section { scroll-margin-top: 72px; }
 }
 
 /* Print: the gallery is the point, so keep it and drop the chrome. */

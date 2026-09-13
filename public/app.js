@@ -89,6 +89,18 @@ const URL_KEYS = {
 
 function readUrl() {
   const params = new URLSearchParams(location.search);
+
+  // The Streamlit version linked as ?district=9 (or ?district=Citywide), and
+  // that URL is on the petition site and in printed QR codes. Honour it so those
+  // links keep landing on the right district.
+  const legacyDistrict = params.get("district");
+  if (legacyDistrict !== null && !params.has("d") && legacyDistrict !== "Citywide") {
+    const id = String(Number(legacyDistrict));
+    if (Array.from(controls.district.options).some((o) => o.value === id)) {
+      controls.district.value = id;
+    }
+  }
+
   for (const [name, key] of Object.entries(URL_KEYS)) {
     const value = params.get(key);
     if (value === null) continue;

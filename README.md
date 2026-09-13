@@ -78,8 +78,19 @@ npx wrangler login
 npm run deploy
 ```
 
-To serve it from `fairtrees.org`, add the domain as a Custom Domain on the Worker
-(Cloudflare dashboard → Workers & Pages → fairtrees → Settings → Domains & Routes).
+### Which hostname this belongs on
+
+`fairtrees.org` itself serves the campaign and petition site — **do not point the
+apex at this Worker**, or that site is replaced. This tracker belongs on a
+subdomain, e.g. `tracker.fairtrees.org`: Cloudflare dashboard → Workers & Pages →
+fairtrees → Settings → Domains & Routes → Add → Custom Domain.
+
+Then update the "SF Empty Tree Basin Tracker" button on the petition site, which
+currently points at `https://fairtrees.streamlit.app/?district=Citywide`.
+
+Old `?district=<n>` links (the Streamlit format, which is also encoded in printed
+QR codes) are still honoured and map onto the district filter, so they keep
+working after the cutover.
 
 ### If you deploy by connecting the repo to Cloudflare
 

@@ -78,12 +78,46 @@ npx wrangler login
 npm run deploy
 ```
 
+### Serving under a path (fairtrees.org/tracker)
+
+Set `BASE_PATH` in `wrangler.toml` to the path, then add a Worker route for it:
+
+```toml
+[vars]
+BASE_PATH = "/tracker"
+```
+
+```
+Workers & Pages -> fairtrees -> Settings -> Domains & Routes -> Add -> Route
+Route:  fairtrees.org/tracker*
+Zone:   fairtrees.org
+```
+
+The Worker strips the prefix, and redirects `/tracker` to `/tracker/` so the
+page's relative URLs have a directory to resolve against. Every same-origin URL
+on the page is relative, so the same build serves correctly at the root or under
+a path with no other changes.
+
+A Worker route requires the zone to be on Cloudflare DNS. `fairtrees.org`
+currently uses Porkbun's nameservers, so this needs the nameservers moved to
+Cloudflare first (Porkbun stays the registrar). Carry these records across — the
+MX records in particular, or email forwarding breaks:
+
+| Type | Name | Value |
+|---|---|---|
+| A | `fairtrees.org` | `172.66.0.70` |
+| CNAME | `www` | `fairtrees.org` |
+| MX | `fairtrees.org` | `fwd1.porkbun.com` (priority 10) |
+| MX | `fairtrees.org` | `fwd2.porkbun.com` (priority 20) |
+| TXT | `fairtrees.org` | `v=spf1 include:_spf.porkbun.com ~all` |
+| TXT | `_dmarc` | `v=DMARC1; p=none;` |
+
 ### Which hostname this belongs on
 
-`fairtrees.org` itself serves the campaign and petition site — **do not point the
-apex at this Worker**, or that site is replaced. This tracker belongs on a
-subdomain, e.g. `tracker.fairtrees.org`: Cloudflare dashboard → Workers & Pages →
-fairtrees → Settings → Domains & Routes → Add → Custom Domain.
+`fairtrees.org` itself serves the campaign site — **do not point the apex at this
+Worker as a Custom Domain**, or that site is replaced. Use either the path route
+above, or a subdomain such as `tracker.fairtrees.org` (Domains & Routes → Add →
+Custom Domain), which leaves the campaign site untouched.
 
 Then update the "SF Empty Tree Basin Tracker" button on the petition site, which
 currently points at `https://fairtrees.streamlit.app/?district=Citywide`.

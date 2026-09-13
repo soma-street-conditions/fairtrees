@@ -131,8 +131,11 @@ terser after about 2015. Nearly every report closed in the last 18 months carrie
 *"Cancelled — Planned Maintenance"*. So **"no planting recorded" means the 311 record
 shows no planting** — it is not by itself proof that no tree was planted.
 
-## Legacy
+## History
 
-`app.py` and `requirements.txt` are the previous Streamlit app. They are kept so the
-old deployment keeps running until this one is live on `fairtrees.org`; delete them
-once you have cut over.
+This replaced a Streamlit app (`app.py`), which was removed once this version took
+over. It is still in the git history if you ever need to look at it:
+
+```bash
+git show b8e7e8a:app.py
+```

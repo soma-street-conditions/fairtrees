@@ -78,82 +78,49 @@ npx wrangler login
 npm run deploy
 ```
 
-### Serving under a path (fairtrees.org/tracker)
+### Putting it on fairtrees.org
 
-Set `BASE_PATH` in `wrangler.toml` to the path, then add a Worker route for it:
+`fairtrees.org` and `www` serve the campaign site, which is hosted on **Carrd**.
+Carrd sits behind Cloudflare itself: the apex `A` record is `172.66.0.70`, inside
+Cloudflare's own published range `172.64.0.0/13`. Two consequences:
+
+1. **A Worker route on `fairtrees.org/tracker*` is not possible.** Routes require
+   the hostname to be proxied (orange-clouded), and Cloudflare refuses to proxy a
+   record pointing at one of its own IPs. Getting the `/tracker` path would mean
+   moving the campaign site off Carrd first.
+2. **The apex and `www` records must stay DNS-only (grey cloud)** after any move
+   to Cloudflare DNS, or the campaign site breaks.
+
+So the tracker goes on its own hostname, `tracker.fairtrees.org`, added as a
+Workers **Custom Domain** (Workers & Pages → fairtrees → Settings → Domains &
+Routes → Add → Custom Domain). A Custom Domain makes the Worker the origin and
+creates its DNS record and certificate automatically, touching nothing else in
+the zone.
+
+That requires the zone on Cloudflare DNS; `fairtrees.org` currently uses
+Porkbun's nameservers. Recreate these records before switching the nameservers —
+the `MX` pair especially, or email forwarding stops:
+
+| Type | Name | Value | Proxy |
+|---|---|---|---|
+| A | `fairtrees.org` | `172.66.0.70` | **DNS only** |
+| CNAME | `www` | `fairtrees.org` | **DNS only** |
+| MX | `fairtrees.org` | `fwd1.porkbun.com` (priority 10) | n/a |
+| MX | `fairtrees.org` | `fwd2.porkbun.com` (priority 20) | n/a |
+| TXT | `fairtrees.org` | `v=spf1 include:_spf.porkbun.com ~all` | n/a |
+| TXT | `_dmarc` | `v=DMARC1; p=none;` | n/a |
+
+### Serving under a path
+
+`BASE_PATH` in `wrangler.toml` makes the Worker serve from a subdirectory (it
+strips the prefix and redirects `/tracker` to `/tracker/` so relative URLs
+resolve). It is unused today because of the Carrd constraint above, but it is
+tested and ready if the campaign site ever moves onto Cloudflare:
 
 ```toml
 [vars]
 BASE_PATH = "/tracker"
 ```
-
-```
-Workers & Pages -> fairtrees -> Settings -> Domains & Routes -> Add -> Route
-Route:  fairtrees.org/tracker*
-Zone:   fairtrees.org
-```
-
-The Worker strips the prefix, and redirects `/tracker` to `/tracker/` so the
-page's relative URLs have a directory to resolve against. Every same-origin URL
-on the page is relative, so the same build serves correctly at the root or under
-a path with no other changes.
-
-A Worker route requires the zone to be on Cloudflare DNS. `fairtrees.org`
-currently uses Porkbun's nameservers, so this needs the nameservers moved to
-Cloudflare first (Porkbun stays the registrar). Carry these records across — the
-MX records in particular, or email forwarding breaks:
-
-| Type | Name | Value |
-|---|---|---|
-| A | `fairtrees.org` | `172.66.0.70` |
-| CNAME | `www` | `fairtrees.org` |
-| MX | `fairtrees.org` | `fwd1.porkbun.com` (priority 10) |
-| MX | `fairtrees.org` | `fwd2.porkbun.com` (priority 20) |
-| TXT | `fairtrees.org` | `v=spf1 include:_spf.porkbun.com ~all` |
-| TXT | `_dmarc` | `v=DMARC1; p=none;` |
-
-### Which hostname this belongs on
-
-`fairtrees.org` itself serves the campaign site — **do not point the apex at this
-Worker as a Custom Domain**, or that site is replaced. Use either the path route
-above, or a subdomain such as `tracker.fairtrees.org` (Domains & Routes → Add →
-Custom Domain), which leaves the campaign site untouched.
-
-Then update the "SF Empty Tree Basin Tracker" button on the petition site, which
-currently points at `https://fairtrees.streamlit.app/?district=Citywide`.
-
-Old `?district=<n>` links (the Streamlit format, which is also encoded in printed
-QR codes) are still honoured and map onto the district filter, so they keep
-working after the cutover.
-
-### If you deploy by connecting the repo to Cloudflare
-
-Cloudflare's Git integration builds your repository's **default branch**. If this
-code is still on a feature branch, the build finds no `wrangler.toml` and fails,
-leaving the Worker on its "Hello world" placeholder. Either merge to the default
-branch, or set the build branch under
-Workers & Pages → fairtrees → Settings → Build.
-
-Build settings that work:
-
-| Setting | Value |
-|---|---|
-| Build command | *(leave empty)* — or `npm run build`, which is a no-op |
-| Deploy command | `npx wrangler deploy` |
-| Root directory | *(leave empty)* |
-
-### Optional: durable photo storage with R2
-
-Photographs work without R2 — they are resolved on demand and cached at the edge.
-R2 makes the archive permanent rather than cache-resident, and lets the scheduled
-job fill it in ahead of visitors.
-
-1. Enable R2 once in the Cloudflare dashboard (R2 → Overview). The free tier covers
-   this project many times over — the full archive is well under 1 GB.
-2. `npx wrangler r2 bucket create fairtrees-photos`
-3. Uncomment the `[[r2_buckets]]` block in `wrangler.toml` and redeploy.
-
-The Worker detects the binding at runtime; with it absent, everything still works.
 
 ## Data sources
 

@@ -187,20 +187,31 @@ async function main() {
 
   const cases = dedupe(rawRows).map(toCase);
 
-  // Some rows arrive without a district or neighbourhood label. When they carry
-  // coordinates we can place them ourselves rather than dropping them into an
-  // "unknown" bucket.
+  // The 311 feed's supervisor_district field is not kept current: it still
+  // reflects the pre-2022 district lines, so (for example) Tenderloin cases are
+  // labelled District 6 although redistricting moved them to District 5. Where a
+  // report has coordinates, assign its district from the City's current boundary
+  // file instead of trusting that field. Reports without coordinates keep the
+  // feed's value, since it is the only signal available.
   let placedNeighborhood = 0;
   let placedDistrict = 0;
+  let correctedDistrict = 0;
   for (const c of cases) {
     if (c.lat === null) continue;
-    if (!c.n) {
-      const found = locate(neighborhoodIndex, c.lng, c.lat);
-      if (found) { c.n = found; placedNeighborhood++; }
+    // Derive the neighbourhood the same way as the district. The feed's
+    // analysis_neighborhood field is currently accurate (4 disagreements
+    // citywide at the time of writing, all on boundary edges), but deriving it
+    // means neither field can drift out of step with the City's own polygons.
+    const hood = locate(neighborhoodIndex, c.lng, c.lat);
+    if (hood) {
+      if (!c.n) placedNeighborhood++;
+      c.n = hood;
     }
-    if (!c.d) {
-      const found = locate(districtIndex, c.lng, c.lat);
-      if (found) { c.d = found; placedDistrict++; }
+    const geo = locate(districtIndex, c.lng, c.lat);
+    if (geo) {
+      if (!c.d) placedDistrict++;
+      else if (c.d !== geo) correctedDistrict++;
+      c.d = geo;
     }
   }
 
@@ -264,6 +275,7 @@ async function main() {
     `\nWrote ${cases.length} cases (${withPhoto} with photos, ${open} still open)\n` +
       `  districts: ${districts.length}   neighborhoods: ${neighborhoods.length}\n` +
       `  placed from coordinates: ${placedNeighborhood} neighborhood, ${placedDistrict} district\n` +
+      `  district corrected against current boundaries: ${correctedDistrict}\n` +
       `  cases with no coordinates: ${cases.filter((c) => c.lat === null).length}\n`
   );
 }

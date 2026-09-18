@@ -4,10 +4,11 @@ Builds a six-page printable PDF of empty street-tree basin reports for one
 supervisor district, from the same San Francisco 311 data as the tracker.
 
 ```
-1  Cover      the City's own closure note, then two headline figures
-2  Findings   the mass closure, repeat reports, how closed cases were closed
-3-5 Blocks    photographs grouped by street, in street-number order
-6  Method     sources, limitations, how to verify any case
+1  Cover       the City's own closure note, then two headline figures
+2  Findings    the mass closure, repeat reports, how closed cases were closed
+3  Comparison  all eleven districts, a locator map, neighbourhoods
+4-6 Blocks     photographs grouped by street, in street-number order
+7  Method      sources, limitations, how to verify any case
 ```
 
 ## Running it
@@ -43,6 +44,19 @@ on request.
 re-characterised on the cover — still open, median wait. Anything needing a
 paragraph of qualification belongs in the body, stated narrowly, with the
 qualification attached.
+
+**Give the numbers scale.** A count on its own tells a supervisor nothing: 151
+open and a 194-day median only mean something beside the other ten districts.
+The comparison table is computed from the same query for every district, so it
+cannot be waved away as a different method applied to someone else's ward.
+
+**Never trust the 311 district field.** It still carries the pre-2022 lines, so
+it files parts of the Tenderloin under District 6. `build-data.mjs` assigns every
+geocoded report from its coordinates against the City's current boundary file,
+in both directions. Getting this wrong in a filing about one district would be
+fatal: a staffer who maps the dots finds basins attributed to a district that no
+longer contains them. Reports the feed never geocoded keep the old label and are
+reported separately rather than counted.
 
 ## Before filing anything
 

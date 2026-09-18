@@ -1,4 +1,8 @@
 import { chromium } from "playwright";
+import { readFileSync } from "node:fs";
+// Keep the running footer in step with the document title.
+const TITLE = (readFileSync("exhibit_v2.html","utf8").match(/<title>([^<]+)<\/title>/)?.[1] || "")
+  .replace(/&mdash;/g,"—").replace(/&amp;/g,"&");
 const b = await chromium.launch({ executablePath: "/opt/pw-browsers/chromium-1194/chrome-linux/chrome" });
 const p = await b.newPage();
 const errs = [];
@@ -15,7 +19,7 @@ await p.pdf({ path: "D6-Empty-Tree-Basins.pdf", format: "Letter", printBackgroun
   margin: { top: "0.7in", bottom: "0.8in", left: "0.7in", right: "0.7in" },
   displayHeaderFooter: true, headerTemplate: "<div></div>",
   footerTemplate: `<div style="width:100%;font-size:7.5pt;color:#777;font-family:Georgia,serif;padding:0 0.7in;display:flex;justify-content:space-between;">
-    <span>Empty Street-Tree Basins — Supervisor District 6</span>
+    <span>${TITLE}</span>
     <span><span class="pageNumber"></span> / <span class="totalPages"></span></span></div>` });
 console.log(`images=${imgs.total} broken=${imgs.broken} errors=${errs.length ? errs.slice(0,3) : "none"}`);
 await b.close();

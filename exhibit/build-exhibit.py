@@ -1,10 +1,12 @@
 #!/usr/bin/env python3
-"""District 6 hearing exhibit, six pages.
+"""District 6 hearing exhibit.
 
 Leads with the City's own closure language; organises photographs by block
 rather than by date; no appendix (the full set lives on the website).
 """
-import json, os, re, html, datetime, collections
+import json, os, re, html, datetime, collections, statistics, sys
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from mapgen import district_map
 
 SCR = "/tmp/claude-0/-home-user-fairtrees/6033c420-3be7-5d5a-929d-e2a8b1fd6fea/scratchpad"
 SUBMITTER, ORG = "Shaun Aukland", "FairTrees.org"
@@ -15,6 +17,10 @@ cases = json.load(open("/home/user/fairtrees/public/data/snapshot.json"))["cases
 d6 = [c for c in cases if c["d"] == "6"]
 has = lambda c: os.path.exists(f"{SCR}/print/{c['id']}.jpg")
 norm = lambda a: re.sub(r"\s+", " ", a.strip().lower())
+citywide = [c for c in cases if c["o"] and c["o"] >= CUT and c["d"]]
+SUPERVISORS = {d["id"]: d["supervisor"]
+               for d in json.load(open("/home/user/fairtrees/public/data/meta.json"))["districts"]}
+d6 = [c for c in cases if c["d"] == "6"]
 win = [c for c in d6 if c["o"] and c["o"] >= CUT]
 
 n_win = len(win)
@@ -25,9 +31,16 @@ n_plant = sum(1 for c in win if c["r"] in ("Tree planted", "Queued for planting"
 odays = sorted((TODAY - datetime.date.fromisoformat(c["o"])).days for c in op)
 median_open, longest_open = odays[len(odays) // 2], max(odays)
 hoods = collections.Counter(c["n"] or "Not recorded" for c in win).most_common()
+MAP_SVG = district_map([c for c in win if c["s"]],
+                       "/home/user/fairtrees/public/data/boundaries.json", labels=3)
 
 EXACT = "do not currently have the resources to plant a new tree at this location"
-nores = [c for c in d6 if c["note"] and EXACT in c["note"]]
+# Split the quoted set by whether the district could be confirmed from
+# coordinates. Reports the feed never geocoded keep the 311 field, which is the
+# stale pre-2022 district, so they are reported separately rather than claimed.
+quoted = [c for c in d6 if c["note"] and EXACT in c["note"]]
+nores = [c for c in quoted if c["lat"] is not None]
+nores_ungeocoded = [c for c in quoted if c["lat"] is None]
 nores_from = min(c["c"] for c in nores if c["c"])
 nores_to = max(c["c"] for c in nores if c["c"])
 
@@ -114,6 +127,20 @@ td.n, th.n { text-align: right; white-space: nowrap; }
 .cap .o { color: #9c2b28; }
 .foot { font-size: 8pt; color: #666; border-top: 0.5pt solid #ccc; padding-top: 5pt; margin-top: 13pt; }
 .lede { font-size: 10pt; }
+/* display findings, matching the weight of the cover figures */
+.display { border-top: 0.75pt solid #bbb; border-bottom: 0.75pt solid #bbb;
+           padding: 11pt 0; margin: 14pt 0; }
+.display .dnum { font-size: 30pt; line-height: 1; }
+.display .dline { font-size: 15pt; line-height: 1.25; }
+.display .dtxt { font-size: 9.2pt; color: #333; margin-top: 7pt; }
+.src { font-size: 7.8pt; color: #666; margin-top: 5pt; }
+table.tight td, table.tight th { padding: 2.8pt 5pt; }
+tr.me td { font-weight: bold; background: #f0f0ec; }
+.twocol { display: flex; gap: 20pt; margin-top: 15pt; align-items: flex-start; }
+.twocol > div:first-child { flex: 1.35; }
+.twocol > div:last-child { flex: 1; }
+.twocol svg { display: block; margin-top: 4pt; }
+
 """
 
 def cell(c):
@@ -123,16 +150,17 @@ def cell(c):
             f'<span class="o">{"Open " + str(days_open(c)) + " days" if c["s"] else e(c["r"][:26])}</span>'
             f'<span>#{e(c["id"])}</span></div></div>')
 
-def photo_page(title, lede, items, foot):
+def photo_page(title, lede, items, foot, cols=5):
     return (f'<div class="page"><h2>{title}</h2><p class="lede">{lede}</p>'
-            f'<div class="grid">{"".join(cell(c) for c in items)}</div>'
+            f'<div class="grid" style="grid-template-columns:repeat({cols},1fr)">{"".join(cell(c) for c in items)}</div>'
             f'<div class="foot">{foot}</div></div>')
 
 # ---------------------------------------------------------------- page 1
 cover = f"""
 <div class="page">
-  <h1>Empty Street-Tree Basins<br>in Supervisor District 6</h1>
-  <div class="sub">Photographic and records evidence from San Francisco 311</div>
+  <h1>{fmt(len(op))} Empty Tree Basins,<br>Still Waiting</h1>
+  <div class="sub">Supervisor District 6 &mdash; photographic and records evidence
+  from San Francisco 311</div>
   <div class="dateline">Reports filed {pretty(CUT)} &ndash; {pretty(TODAY.isoformat())}</div>
   <div class="rule"></div>
 
@@ -179,7 +207,21 @@ hood_rows = "".join(
     f'<td class="n">{fmt(sum(1 for c in win if (c["n"] or "Not recorded")==k and c["s"]))}</td></tr>'
     for k, v in hoods)
 
-stevenson = sorted([c for c in d6 if norm(c["a"]).startswith("548 stevenson") and c["s"]],
+stevenson = sorted([c for c in win if norm(c["a"]).startswith("548 stevenson") and c["s"]],
+                   key=lambda c: c["o"])
+
+dist_rows = []
+for d in sorted({c["d"] for c in citywide if c["d"]}, key=int):
+    ds = [c for c in citywide if c["d"] == d]
+    o = [c for c in ds if c["s"]]
+    dd = sorted(days_open(c) for c in o)
+    dist_rows.append((d, SUPERVISORS.get(d, ""), len(ds), len(o), dd[len(dd) // 2] if dd else 0))
+city_open = sum(r[3] for r in dist_rows)
+city_n = sum(r[2] for r in dist_rows)
+median_of_medians = statistics.median([r[4] for r in dist_rows])
+d11 = max(dist_rows, key=lambda r: r[4])
+
+stevenson = sorted([c for c in win if norm(c["a"]).startswith("548 stevenson") and c["s"]],
                    key=lambda c: c["o"])
 
 findings = f"""
@@ -189,39 +231,89 @@ findings = f"""
   <p>Residents filed <strong>{fmt(n_win)}</strong> reports of empty street-tree basins in
   District 6 between {pretty(CUT)} and {pretty(TODAY.isoformat())}.
   <strong>{fmt(len(op))} of them &mdash; {round(len(op)/n_win*100)}% &mdash; are still open.</strong>
-  The median open case has waited {median_open} days.</p>
+  The median open case has waited {median_open} days; the longest has been open
+  {longest_open} days.</p>
 
-  <h3>A single day's closures</h3>
-  <p>On {pretty(MASS)}, the City closed <strong>{fmt(len(mass_all))} empty-basin reports
-  citywide in one day</strong> &mdash; {fmt(len(mass_d6))} of them in District 6 &mdash; every
-  one carrying the same note, &ldquo;Cancelled &mdash; Planned Maintenance.&rdquo; Residents
-  have since filed fresh reports at <strong>{fmt(len(reported_again))} of those District 6
-  locations</strong>. All {fmt(len(reported_again))} of those new reports are still open.
-  Fifteen of them are photographed on page 4.</p>
+  <div class="display">
+    <div class="dnum">{fmt(len(mass_all))}</div>
+    <div class="dtxt">empty-basin reports closed across San Francisco in a single day,
+    {pretty(MASS)} &mdash; every one of them noted
+    &ldquo;Cancelled&nbsp;&mdash;&nbsp;Planned Maintenance.&rdquo;
+    <strong>{fmt(len(mass_d6))} were in District 6.</strong> Residents have since filed fresh
+    reports at {fmt(len(reported_again))} of those District 6 locations, and every one of those
+    new reports is still open. Twelve are photographed on page 5.</div>
+  </div>
 
-  <h3>The same basin, reported six times</h3>
-  <p>548 Stevenson Street has been reported <strong>{fmt(len(stevenson))} separate times</strong>
-  this year &mdash; {", ".join(pretty(c["o"], False) for c in stevenson[:-1])} and
-  {pretty(stevenson[-1]["o"], False)}. Every one of those reports is still open.</p>
+  <div class="display">
+    <div class="dline">Six reports. One basin. One year. All still open.</div>
+    <div class="dtxt">548 Stevenson Street was reported on
+    {", ".join(pretty(c["o"], False) for c in stevenson[:-1])} and
+    {pretty(stevenson[-1]["o"], False)} of this year. Each report is a separate 311 case. Not one
+    has been closed.</div>
+  </div>
 
   <h3>How the {fmt(len(cl))} closed reports were closed</h3>
   <p>Of the {fmt(len(cl))} reports the City closed in this period,
   <strong>{fmt(n_canc)} ({round(n_canc/len(cl)*100)}%)</strong> carry the note
-  &ldquo;Cancelled &mdash; Planned Maintenance,&rdquo; and <strong>none</strong> record a tree having
-  been planted. That figure describes the public record rather than the ground: closure notes
-  became markedly less specific after about 2015, and today almost every closed report carries
-  only that one phrase. The fair conclusion is not that nothing was planted, but that
+  &ldquo;Cancelled &mdash; Planned Maintenance,&rdquo; and <strong>none</strong> record a tree
+  having been planted. That figure describes the public record rather than the ground: closure
+  notes became markedly less specific after about 2015, and today almost every closed report
+  carries only that one phrase. The fair conclusion is not that nothing was planted, but that
   <strong>a resident cannot tell from the public record what happened to their report</strong>
-  &mdash; which is why the reports above keep being filed again.</p>
+  &mdash; which is why the same basins keep being reported again.</p>
+</div>
+"""
 
-  <h3>Where they are</h3>
-  <p class="small muted" style="margin-bottom:6pt">District 6 as drawn covers more than the South
-  of Market core. The counts below are for the whole district, including the Tenderloin.</p>
-  <table>
-    <thead><tr><th>Neighborhood</th><th class="n" style="width:1.2in">Reports</th>
-    <th class="n" style="width:1.2in">Still open</th></tr></thead>
-    <tbody>{hood_rows}</tbody>
+def dist_row(d, nm, n, o, med):
+    cls = ' class="me"' if d == "6" else ""
+    pct = round(o / n * 100) if n else 0
+    return (f'<tr{cls}><td>{d} &nbsp;{e(nm)}</td><td class="n">{fmt(n)}</td>'
+            f'<td class="n">{fmt(o)}</td><td class="n">{pct}%</td>'
+            f'<td class="n">{med}</td></tr>')
+
+dist_table = "".join(dist_row(*r) for r in dist_rows)
+
+hood_rows = "".join(
+    f'<tr><td>{e(k)}</td><td class="n">{fmt(v)}</td>'
+    f'<td class="n">{fmt(sum(1 for c in win if (c["n"] or "Not recorded")==k and c["s"]))}</td></tr>'
+    for k, v in hoods)
+
+comparison = f"""
+<div class="page">
+  <h2>District 6 against the rest of the city</h2>
+
+  <p>Empty basins are not evenly distributed, and neither is the wait. District 6 filed
+  <strong>{round(n_win/city_n*100)}%</strong> of the empty-basin reports made in San Francisco over
+  these two years, and holds <strong>{round(len(op)/city_open*100)}% of every one that is still
+  open</strong> &mdash; {fmt(len(op))} of {fmt(city_open)}, more than twice the next district.
+  Its median open case has waited {median_open} days against {int(median_of_medians)} across the
+  eleven districts. Only District {d11[0]}&rsquo;s median is longer, on {d11[3]} open cases.</p>
+
+  <table class="tight">
+    <thead><tr><th>Supervisorial district</th><th class="n">Reports</th><th class="n">Still open</th>
+    <th class="n">% open</th><th class="n">Median days open</th></tr></thead>
+    <tbody>{dist_table}</tbody>
   </table>
+  <p class="src">All eleven districts, same period and same query; district assigned from each
+  report&rsquo;s coordinates against the City&rsquo;s current boundary file.</p>
+
+  <div class="twocol">
+    <div>
+      <h3 style="margin-top:4pt">Where the open reports are</h3>
+      {MAP_SVG}
+      <p class="src">One dot for each of the {fmt(len(op))} open reports. Treasure Island, also in
+      District 6, is not shown; none of its {fmt(sum(1 for c in win if c["n"]=="Treasure Island"))}
+      reports is open.</p>
+    </div>
+    <div>
+      <h3 style="margin-top:4pt">By neighborhood</h3>
+      <table>
+        <thead><tr><th>Neighborhood</th><th class="n">Reports</th><th class="n">Open</th></tr></thead>
+        <tbody>{hood_rows}</tbody>
+      </table>
+      <p class="src">Every report in this period carries a neighborhood label from the City.</p>
+    </div>
+  </div>
 </div>
 """
 
@@ -245,7 +337,7 @@ page_again = photo_page(
     f"later &mdash; and photographed. <strong>Every one of these newer reports is still open.</strong> "
     f"The date shown is the date of the new report, not the closed one.",
     reported_again_photo,
-    "The closure of a 311 case is not evidence that a tree was planted.")
+    "The closure of a 311 case is not evidence that a tree was planted.", cols=4)
 
 mix = china + howard[:max(0, 15 - len(china))]
 china_days = sorted(days_open(c) for c in china if c["s"])
@@ -271,6 +363,14 @@ method = f"""
   reported on or after {pretty(CUT)}, de-duplicated by service request ID. That yields the
   {fmt(n_win)} reports counted here. The {fmt(len(nores))} cases quoted on page 1 are older, and
   were identified by the exact closure sentence reproduced there.</p>
+    <p><strong>Districts.</strong> The 311 feed&rsquo;s own supervisor-district field still
+    reflects the pre-2022 district lines, so it places parts of the Tenderloin in District 6.
+    Every report here is instead assigned from its coordinates against the City&rsquo;s current
+    boundary file, in both directions: reports the feed calls District 6 that now fall outside it
+    are excluded, and reports it assigns elsewhere that fall inside are included. A further
+    {fmt(len(nores_ungeocoded))} cases carry the closure note quoted on page 1 at District 6
+    addresses the feed never geocoded; their district cannot be confirmed from coordinates, so
+    they are excluded from the {fmt(len(nores))} counted there.</p>
 
   <p><strong>Photographs.</strong> Each was taken by a resident and attached to their own 311
   report. They are reproduced unaltered apart from resizing and rotation to correct orientation.
@@ -302,9 +402,9 @@ method = f"""
 """
 
 doc = (f'<!doctype html><html><head><meta charset="utf-8">'
-       f'<title>Empty Street-Tree Basins in Supervisor District 6</title>'
+       f'<title>{fmt(len(op))} Empty Tree Basins, Still Waiting — Supervisor District 6</title>'
        f'<style>{CSS}</style></head><body>'
-       + cover + findings + page_langton + page_again + page_mix + method
+       + cover + findings + comparison + page_langton + page_again + page_mix + method
        + '</body></html>')
 open(f"{SCR}/exhibit_v2.html", "w").write(doc)
 

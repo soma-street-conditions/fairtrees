@@ -8,8 +8,14 @@ supervisor district, from the same San Francisco 311 data as the tracker.
 2  Findings    the mass closure, repeat reports, how closed cases were closed
 3  Comparison  all eleven districts, a locator map, neighbourhoods
 4-6 Blocks     photographs grouped by street, in street-number order
-7  Method      sources, limitations, how to verify any case
 ```
+
+There is no method page. Source, date range, dataset, authorship and how to
+verify a case all sit on the cover, and the document ends on evidence rather
+than on housekeeping. One sentence has to survive that cut, on the comparison
+page: that the district is derived from coordinates because the 311 field is
+stale. Without it the figures do not reproduce — a reader who queries the feed
+directly gets a larger District 6 and concludes the exhibit is wrong.
 
 ## Running it
 

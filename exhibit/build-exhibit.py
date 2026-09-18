@@ -137,9 +137,12 @@ td.n, th.n { text-align: right; white-space: nowrap; }
 table.tight td, table.tight th { padding: 2.8pt 5pt; }
 tr.me td { font-weight: bold; background: #f0f0ec; }
 .twocol { display: flex; gap: 20pt; margin-top: 15pt; align-items: flex-start; }
+/* Flex items default to min-width:auto, which lets the map force the
+   column wider than its share instead of scaling down into it. */
+.twocol > div { min-width: 0; }
 .twocol > div:first-child { flex: 1.35; }
 .twocol > div:last-child { flex: 1; }
-.twocol svg { display: block; margin-top: 4pt; }
+.twocol svg { display: block; margin-top: 4pt; height: 2.9in; width: auto; max-width: 100%; }
 
 """
 
@@ -294,16 +297,17 @@ comparison = f"""
     <th class="n">% open</th><th class="n">Median days open</th></tr></thead>
     <tbody>{dist_table}</tbody>
   </table>
-  <p class="src">All eleven districts, same period and same query; district assigned from each
-  report&rsquo;s coordinates against the City&rsquo;s current boundary file.</p>
+  <p class="src">All eleven districts, same period and same query. District is assigned from each
+  report&rsquo;s coordinates against the City&rsquo;s current boundary file &mdash; the 311
+  feed&rsquo;s own district field still carries the pre-2022 lines, and querying it directly
+  returns a larger District 6.</p>
 
   <div class="twocol">
     <div>
       <h3 style="margin-top:4pt">Where the open reports are</h3>
       {MAP_SVG}
-      <p class="src">One dot for each of the {fmt(len(op))} open reports. Treasure Island, also in
-      District 6, is not shown; none of its {fmt(sum(1 for c in win if c["n"]=="Treasure Island"))}
-      reports is open.</p>
+      <p class="src">One dot per open report. Treasure Island, also in District 6, is not shown;
+      none of its {fmt(sum(1 for c in win if c["n"]=="Treasure Island"))} reports is open.</p>
     </div>
     <div>
       <h3 style="margin-top:4pt">By neighborhood</h3>
@@ -311,7 +315,7 @@ comparison = f"""
         <thead><tr><th>Neighborhood</th><th class="n">Reports</th><th class="n">Open</th></tr></thead>
         <tbody>{hood_rows}</tbody>
       </table>
-      <p class="src">Every report in this period carries a neighborhood label from the City.</p>
+      <p class="src">Every report carries a City neighborhood label.</p>
     </div>
   </div>
 </div>
@@ -350,61 +354,10 @@ page_mix = photo_page(
     mix,
     "Addresses run in street-number order, not date order.")
 
-method = f"""
-<div class="page">
-  <h2>Method and verification</h2>
-
-  <p><strong>Source.</strong> Every record is a 311 service request from the City and County of
-  San Francisco's open data portal, dataset <strong>vw6y-z8j6</strong>, retrieved
-  {pretty(TODAY.isoformat())}. Nothing has been supplied, estimated or altered by the author.</p>
-
-  <p><strong>Selection.</strong> Records were filtered to those whose <em>service detail</em> is
-  <code>EMPTY_TREE_BASIN</code> and whose <em>supervisor district</em> is <strong>6</strong>,
-  reported on or after {pretty(CUT)}, de-duplicated by service request ID. That yields the
-  {fmt(n_win)} reports counted here. The {fmt(len(nores))} cases quoted on page 1 are older, and
-  were identified by the exact closure sentence reproduced there.</p>
-    <p><strong>Districts.</strong> The 311 feed&rsquo;s own supervisor-district field still
-    reflects the pre-2022 district lines, so it places parts of the Tenderloin in District 6.
-    Every report here is instead assigned from its coordinates against the City&rsquo;s current
-    boundary file, in both directions: reports the feed calls District 6 that now fall outside it
-    are excluded, and reports it assigns elsewhere that fall inside are included. A further
-    {fmt(len(nores_ungeocoded))} cases carry the closure note quoted on page 1 at District 6
-    addresses the feed never geocoded; their district cannot be confirmed from coordinates, so
-    they are excluded from the {fmt(len(nores))} counted there.</p>
-
-  <p><strong>Photographs.</strong> Each was taken by a resident and attached to their own 311
-  report. They are reproduced unaltered apart from resizing and rotation to correct orientation.
-  Of the {fmt(n_win)} reports, {fmt(sum(1 for c in win if has(c)))} carry a retrievable
-  photograph; 311 began retaining attachments only recently, which is why the
-  {fmt(len(nores))} cases quoted on page 1 have none. <strong>The complete set of
-  {fmt(sum(1 for c in win if has(c)))} photographs is published at fairtrees.org and available on
-  request</strong> &mdash; the selection here is organised by street, not chosen for effect.</p>
-
-  <p><strong>Dates.</strong> &ldquo;Reported&rdquo; is the 311 <em>requested_datetime</em>; days
-  open are counted to {pretty(TODAY.isoformat())}. Outcome descriptions are taken from the
-  free-text closure note City staff entered, and are quoted rather than interpreted wherever the
-  wording matters.</p>
-
-  <p><strong>Limitations.</strong> District and neighborhood assignment is the City's own
-  geocoding; {fmt(sum(1 for c in win if not c["n"]))} reports in this period carry no
-  neighborhood label, and reports filed at an intersection often carry no coordinates. Counts of
-  what the City did are counts of what the City <em>recorded</em>.</p>
-
-  <p><strong>Verification.</strong> Every photograph and table row carries its 311 case number.
-  Any case can be checked at
-  <strong>mobile311.sfgov.org/tickets/&lt;case&nbsp;number&gt;</strong> or by querying the open
-  dataset directly. The continuously updated record for all eleven districts is at
-  <strong>fairtrees.org</strong>.</p>
-
-  <div class="foot">Prepared by {e(SUBMITTER)}, {e(ORG)}. Questions about the derivation of any
-  figure are welcome; the query and code behind this document are public.</div>
-</div>
-"""
-
 doc = (f'<!doctype html><html><head><meta charset="utf-8">'
        f'<title>{fmt(len(op))} Empty Tree Basins, Still Waiting — Supervisor District 6</title>'
        f'<style>{CSS}</style></head><body>'
-       + cover + findings + comparison + page_langton + page_again + page_mix + method
+       + cover + findings + comparison + page_langton + page_again + page_mix
        + '</body></html>')
 open(f"{SCR}/exhibit_v2.html", "w").write(doc)
 

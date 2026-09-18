@@ -50,6 +50,12 @@ open and a 194-day median only mean something beside the other ten districts.
 The comparison table is computed from the same query for every district, so it
 cannot be waved away as a different method applied to someone else's ward.
 
+**Geocode the intersections.** About a third of reports are filed at an
+intersection and arrive from 311 with no coordinates, so they cannot be placed
+in a district or drawn on a map. The City's centreline file (`gmfx-8h6i`) lists
+every node with the streets meeting it; matching both named streets recovers the
+position. Note that numbered streets are zero-padded there — 8th St is `08TH ST`.
+
 **Never trust the 311 district field.** It still carries the pre-2022 lines, so
 it files parts of the Tenderloin under District 6. `build-data.mjs` assigns every
 geocoded report from its coordinates against the City's current boundary file,

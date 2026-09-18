@@ -17,6 +17,7 @@ import { casesRequestUrl, dedupe, toCase } from "../src/transform.mjs";
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const DISTRICTS_URL = "https://data.sf.gov/resource/cqbw-m5m3.geojson";
 const NEIGHBORHOODS_URL = "https://data.sf.gov/resource/j2bu-swwd.geojson";
+const INTERSECTIONS_URL = "https://data.sf.gov/resource/gmfx-8h6i.geojson?$limit=50000";
 
 async function getJSON(url, label) {
   for (let attempt = 1; attempt <= 4; attempt++) {
@@ -174,18 +175,91 @@ function boundaryCollection(features, nameOf, tolerance) {
   };
 }
 
+
+/* ---------- intersection geocoding ---------- */
+
+// Roughly a third of reports are filed at an intersection and arrive from 311
+// with no coordinates, so they cannot be placed in a district or mapped. The
+// City's centreline file lists every node with the streets meeting it, so a node
+// shared by both named streets gives the position.
+const STREET_TYPES = /\b(ST|AVE|BLVD|DR|WAY|CT|PL|LN|TER|RD|ALY|HWY|CIR|PLZ|WALK|STWY|EXPY|LOOP)\b/g;
+
+function normalizeStreet(name) {
+  return (name || "")
+    .toUpperCase()
+    .replace(/[^A-Z0-9 ]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    // The centreline file zero-pads numbered streets: 8th St is stored as 08TH ST.
+    .replace(/\b([1-9])(ST|ND|RD|TH)\b/g, "0$1$2");
+}
+
+const baseStreet = (name) => normalizeStreet(name).replace(STREET_TYPES, "").trim();
+
+function buildIntersectionIndex(features) {
+  const nodes = new Map();
+  for (const f of features) {
+    const p = f.properties;
+    const key = p.cnntext;
+    if (!nodes.has(key)) nodes.set(key, { names: new Set(), xy: null });
+    nodes.get(key).names.add(`${p.st_name} ${p.st_type || ""}`.trim());
+    nodes.get(key).xy = f.geometry?.coordinates ?? null;
+  }
+  const exact = new Map();
+  const loose = new Map();
+  const put = (map, a, b, xy) => {
+    const k = [a, b].sort().join("|");
+    if (!map.has(k)) map.set(k, xy);
+  };
+  for (const { names, xy } of nodes.values()) {
+    if (!xy || names.size < 2) continue;
+    const list = [...names];
+    for (let i = 0; i < list.length; i++) {
+      for (let j = i + 1; j < list.length; j++) {
+        put(exact, normalizeStreet(list[i]), normalizeStreet(list[j]), xy);
+        put(loose, baseStreet(list[i]), baseStreet(list[j]), xy);
+      }
+    }
+  }
+  return { exact, loose };
+}
+
+/** Coordinates for an address shaped "Turk St & Leavenworth St", or null. */
+function locateIntersection(address, index) {
+  if (!address || !address.includes(" & ")) return null;
+  const [a, b] = address.split(" & ").map((s) => s.trim());
+  const key = (f) => [f(a), f(b)].sort().join("|");
+  return index.exact.get(key(normalizeStreet))
+      ?? index.loose.get(key(baseStreet))
+      ?? null;
+}
+
 async function main() {
   process.stderr.write("Fetching 311 cases...\n");
-  const [rawRows, districtGeo, neighborhoodGeo] = await Promise.all([
+  const [rawRows, districtGeo, neighborhoodGeo, intersectionGeo] = await Promise.all([
     fetchAllCases(),
     getJSON(DISTRICTS_URL, "districts"),
     getJSON(NEIGHBORHOODS_URL, "neighborhoods"),
+    getJSON(INTERSECTIONS_URL, "intersections"),
   ]);
 
   const neighborhoodIndex = buildIndex(neighborhoodGeo.features, (p) => p.nhood);
   const districtIndex = buildIndex(districtGeo.features, (p) => String(Number(p.sup_dist_num)));
 
   const cases = dedupe(rawRows).map(toCase);
+
+  // Place intersection reports before anything is assigned from coordinates.
+  const intersections = buildIntersectionIndex(intersectionGeo.features);
+  let geocodedIntersections = 0;
+  for (const c of cases) {
+    if (c.lat !== null) continue;
+    const xy = locateIntersection(c.a, intersections);
+    if (xy) {
+      c.lng = Number(xy[0].toFixed(6));
+      c.lat = Number(xy[1].toFixed(6));
+      geocodedIntersections++;
+    }
+  }
 
   // The 311 feed's supervisor_district field is not kept current: it still
   // reflects the pre-2022 district lines, so (for example) Tenderloin cases are
@@ -276,6 +350,7 @@ async function main() {
       `  districts: ${districts.length}   neighborhoods: ${neighborhoods.length}\n` +
       `  placed from coordinates: ${placedNeighborhood} neighborhood, ${placedDistrict} district\n` +
       `  district corrected against current boundaries: ${correctedDistrict}\n` +
+      `  intersections geocoded from the centreline file: ${geocodedIntersections}\n` +
       `  cases with no coordinates: ${cases.filter((c) => c.lat === null).length}\n`
   );
 }

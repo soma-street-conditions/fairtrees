@@ -18,8 +18,6 @@ d6 = [c for c in cases if c["d"] == "6"]
 has = lambda c: os.path.exists(f"{SCR}/print/{c['id']}.jpg")
 norm = lambda a: re.sub(r"\s+", " ", a.strip().lower())
 citywide = [c for c in cases if c["o"] and c["o"] >= CUT and c["d"]]
-SUPERVISORS = {d["id"]: d["supervisor"]
-               for d in json.load(open("/home/user/fairtrees/public/data/meta.json"))["districts"]}
 d6 = [c for c in cases if c["d"] == "6"]
 win = [c for c in d6 if c["o"] and c["o"] >= CUT]
 
@@ -116,6 +114,9 @@ p { margin: 0 0 9pt; }
         border-bottom: 0.75pt solid #bbb; padding: 11pt 0; }
 .figs div { flex: 1; }
 .figs .n { font-size: 27pt; line-height: 1; }
+.figs.three { gap: 19pt; }
+.figs.three .n { font-size: 21pt; }
+.figs.three .t { font-size: 8.5pt; line-height: 1.38; }
 .figs .t { font-size: 9pt; color: #444; margin-top: 5pt; }
 
 table { width: 100%; border-collapse: collapse; font-size: 9pt; }
@@ -125,13 +126,13 @@ td { padding: 3.5pt 5pt; border-bottom: 0.5pt solid #ddd; }
 td.n, th.n { text-align: right; white-space: nowrap; }
 
 .grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 9pt 7pt; margin-top: 12pt; }
-.cell img { width: 100%; height: 1.78in; object-fit: cover; display: block;
+.cell img { width: 100%; height: 1.68in; object-fit: cover; display: block;
             border: 0.5pt solid #bbb; background: #eee; }
-.cap { font-size: 6.9pt; line-height: 1.32; margin-top: 2.5pt; font-family: Helvetica, Arial, sans-serif; }
+.cap { font-size: 7.8pt; line-height: 1.3; margin-top: 2.5pt; font-family: Helvetica, Arial, sans-serif; }
 .cap b { display: block; }
 .cap span { display: block; color: #555; }
-.cap .o { color: #9c2b28; }
-.foot { font-size: 8pt; color: #666; border-top: 0.5pt solid #ccc; padding-top: 5pt; margin-top: 13pt; }
+.cap .o { color: #7d1d1a; font-weight: bold; }
+.foot { font-size: 8pt; color: #666; border-top: 0.5pt solid #ccc; padding-top: 5pt; margin-top: 9pt; }
 .lede { font-size: 10pt; }
 /* Context photographs: shown whole rather than cropped, since the width of the
    pavement is the point being made. */
@@ -140,7 +141,7 @@ td.n, th.n { text-align: right; white-space: nowrap; }
 .sites-grid img { width: 100%; height: 2.78in; object-fit: contain;
                   background: #fff; display: block; }
 .sites-grid figure > img { border-bottom: 0.5pt solid #ddd; padding-bottom: 3pt; }
-.sites-grid figcaption { font-size: 7.6pt; line-height: 1.35; margin-top: 4pt; color: #444;
+.sites-grid figcaption { font-size: 8.2pt; line-height: 1.35; margin-top: 4pt; color: #444;
                          font-family: Helvetica, Arial, sans-serif; }
 .sites-grid figcaption b { display: block; color: #111; }
 
@@ -153,13 +154,41 @@ td.n, th.n { text-align: right; white-space: nowrap; }
 .src { font-size: 7.8pt; color: #666; margin-top: 5pt; }
 table.tight td, table.tight th { padding: 2.8pt 5pt; }
 tr.me td { font-weight: bold; background: #f0f0ec; }
-.twocol { display: flex; gap: 20pt; margin-top: 15pt; align-items: flex-start; }
+.twocol { display: flex; gap: 20pt; margin-top: 11pt; align-items: flex-start; }
 /* Flex items default to min-width:auto, which lets the map force the
    column wider than its share instead of scaling down into it. */
 .twocol > div { min-width: 0; }
 .twocol > div:first-child { flex: 1.35; }
 .twocol > div:last-child { flex: 1; }
-.twocol svg { display: block; margin-top: 4pt; height: 2.9in; width: auto; max-width: 100%; }
+.twocol svg { display: block; margin-top: 4pt; height: 3.3in; width: auto; max-width: 100%; }
+
+/* cover: the closure note and the photograph that answers it, side by side */
+.coverflex { display: flex; gap: 19pt; align-items: flex-start; }
+.coverflex > div, .coverflex > figure { min-width: 0; }
+.coverflex > div { flex: 1.62; }
+.coverfig { flex: 1; margin: 0; }
+.coverfig img { width: 100%; height: 3.35in; object-fit: cover; object-position: 50% 60%;
+                display: block; border: 0.5pt solid #bbb; }
+.coverfig figcaption { font-size: 7.9pt; line-height: 1.36; margin-top: 4pt; color: #444;
+                       font-family: Helvetica, Arial, sans-serif; }
+.coverfig figcaption b { display: block; color: #111; }
+.coverflex .quote p { font-size: 11pt; }
+.claim { font-size: 13.5pt; line-height: 1.3; margin: 13pt 0 0; }
+
+/* districts, sorted, as a chart rather than a table the reader must search */
+.bhead, .brow { display: grid; grid-template-columns: 50pt 1fr 25pt 56pt 44pt;
+                align-items: center; gap: 8pt; }
+.bhead { font-size: 8.4pt; font-style: italic; color: #555; padding-bottom: 4pt;
+         border-bottom: 0.75pt solid #999; }
+.brow { font-size: 8.8pt; padding: 2.6pt 0; border-bottom: 0.5pt solid #e8e8e4; }
+.bars { margin: 13pt 0 5pt; }
+.btrack { background: #edede9; height: 9.5pt; }
+.bfill { background: #9aa39c; height: 100%; }
+.brow.me { font-weight: bold; }
+.brow.me .bfill { background: #8c2320; }
+.bv, .bn, .bmed, .bhead .r { text-align: right; }
+.bn, .bmed { color: #555; font-size: 8.2pt; }
+.brow.me .bn, .brow.me .bmed { color: #222; }
 
 """
 
@@ -175,6 +204,35 @@ def photo_page(title, lede, items, foot, cols=5):
             f'<div class="grid" style="grid-template-columns:repeat({cols},1fr)">{"".join(cell(c) for c in items)}</div>'
             f'<div class="foot">{foot}</div></div>')
 
+# ---------------------------------------------------------------- districts
+# Supervisor names are deliberately left out: the finding is about the
+# distribution of the backlog, not about who represents where.
+dist_rows = []
+for d in sorted({c["d"] for c in citywide if c["d"]}, key=int):
+    ds = [c for c in citywide if c["d"] == d]
+    o = [c for c in ds if c["s"]]
+    dd = sorted(days_open(c) for c in o)
+    dist_rows.append((d, len(ds), len(o), dd[len(dd) // 2] if dd else 0))
+city_open = sum(r[2] for r in dist_rows)
+city_n = sum(r[1] for r in dist_rows)
+pct_open = lambda r: (r[2] / r[1] * 100) if r[1] else 0
+median_of_medians = statistics.median([r[3] for r in dist_rows])
+# The longest median belongs to a district with a handful of open cases, so it
+# is named rather than glossed: "longest wait" is a claim that would not hold.
+longest_median = max(dist_rows, key=lambda r: r[3])
+
+def bar_row(r):
+    d, n, o, med = r
+    pct = pct_open(r)
+    cls = "brow me" if d == "6" else "brow"
+    return (f'<div class="{cls}"><div class="bl">District {d}</div>'
+            f'<div class="btrack"><div class="bfill" style="width:{pct:.0f}%"></div></div>'
+            f'<div class="bv">{pct:.0f}%</div>'
+            f'<div class="bn">{fmt(o)} of {fmt(n)}</div>'
+            f'<div class="bmed">{med} d</div></div>')
+
+dist_bars = "".join(bar_row(r) for r in sorted(dist_rows, key=pct_open, reverse=True))
+
 # ---------------------------------------------------------------- page 1
 cover = f"""
 <div class="page">
@@ -184,30 +242,45 @@ cover = f"""
   <div class="dateline">Reports filed {pretty(CUT)} &ndash; {pretty(TODAY.isoformat())}</div>
   <div class="rule"></div>
 
-  <p>On <strong>{fmt(len(nores))} District 6 service requests</strong> closed between
-  {pretty(nores_from)} and {pretty(nores_to)}, San Francisco Public Works closed the case with
-  this note:</p>
+  <div class="coverflex">
+    <div>
+      <p>On <strong>{fmt(len(nores))} District 6 service requests</strong> closed between
+      {pretty(nores_from)} and {pretty(nores_to)}, San Francisco Public Works closed the case with
+      this note:</p>
 
-  <div class="quote">
-    <p>&ldquo;We have confirmed that this is an empty basin. Unfortunately, we do not currently
-    have the resources to plant a new tree at this location, but it is on our list of sites to
-    plant once funding is available. If you want to pursue the planting of and can water a new
-    tree weekly for three years, please let us know at urbanforestry@sfdpw.org&rdquo;</p>
-    <div class="src">Reproduced verbatim from San Francisco 311, dataset vw6y-z8j6.</div>
+      <div class="quote">
+        <p>&ldquo;We have confirmed that this is an empty basin. Unfortunately, we do not currently
+        have the resources to plant a new tree at this location, but it is on our list of sites to
+        plant once funding is available. If you want to pursue the planting of and can water a new
+        tree weekly for three years, please let us know at urbanforestry@sfdpw.org&rdquo;</p>
+        <div class="src">Reproduced verbatim from San Francisco 311, dataset vw6y-z8j6.</div>
+      </div>
+
+      <p>The basin was inspected and confirmed empty. The case was closed without a tree being
+      planted. The resident was invited to buy the tree and water it weekly for three years
+      themselves &mdash; on a public sidewalk the City is responsible for maintaining.</p>
+    </div>
+
+    <figure class="coverfig"><img src="sites/site8.jpg" alt="">
+      <figcaption><b>9th Street, approaching Brannan</b>A Public Works barricade
+      (SFDPW&#8209;BSSR) posts a no&#8209;stopping work window for 20&ndash;24 October 2025.
+      Utility locates are sprayed in orange and a tree basin is laid out in white. The concrete
+      inside the marks was never cut.</figcaption></figure>
   </div>
 
-  <p>The basin was inspected and confirmed empty. The case was closed without a tree being
-  planted. The resident was invited to buy the tree and water it weekly for three years
-  themselves &mdash; on a public sidewalk the City is responsible for maintaining.</p>
-
-  <div class="figs">
+  <div class="figs three">
     <div><div class="n">{fmt(len(op))}</div>
       <div class="t">empty basins reported in District 6 and still open today,
       out of {fmt(n_win)} reported in the last two years</div></div>
+    <div><div class="n">{round(len(op)/city_open*100)}%</div>
+      <div class="t">of every empty-basin report still open anywhere in San Francisco is in
+      District 6 &mdash; which filed {round(n_win/city_n*100)}% of the city&rsquo;s reports</div></div>
     <div><div class="n">{median_open} days</div>
       <div class="t">median wait for an open case; the longest has been open
       {longest_open} days</div></div>
   </div>
+
+  <p class="claim">The sites already exist. They are already cut, and already empty.</p>
 
   <p class="small muted" style="margin-top:14pt">Every case in this document carries its 311
   case number and can be verified independently at
@@ -230,17 +303,6 @@ hood_rows = "".join(
 stevenson = sorted([c for c in win if norm(c["a"]).startswith("548 stevenson") and c["s"]],
                    key=lambda c: c["o"])
 
-dist_rows = []
-for d in sorted({c["d"] for c in citywide if c["d"]}, key=int):
-    ds = [c for c in citywide if c["d"] == d]
-    o = [c for c in ds if c["s"]]
-    dd = sorted(days_open(c) for c in o)
-    dist_rows.append((d, SUPERVISORS.get(d, ""), len(ds), len(o), dd[len(dd) // 2] if dd else 0))
-city_open = sum(r[3] for r in dist_rows)
-city_n = sum(r[2] for r in dist_rows)
-median_of_medians = statistics.median([r[4] for r in dist_rows])
-d11 = max(dist_rows, key=lambda r: r[4])
-
 stevenson = sorted([c for c in win if norm(c["a"]).startswith("548 stevenson") and c["s"]],
                    key=lambda c: c["o"])
 
@@ -261,7 +323,7 @@ findings = f"""
     &ldquo;Cancelled&nbsp;&mdash;&nbsp;Planned Maintenance.&rdquo;
     <strong>{fmt(len(mass_d6))} were in District 6.</strong> Residents have since filed fresh
     reports at {fmt(len(reported_again))} of those District 6 locations, and every one of those
-    new reports is still open. Twelve are photographed on page 5.</div>
+    new reports is still open. Twelve are photographed on page 6.</div>
   </div>
 
   <div class="display">
@@ -284,15 +346,6 @@ findings = f"""
 </div>
 """
 
-def dist_row(d, nm, n, o, med):
-    cls = ' class="me"' if d == "6" else ""
-    pct = round(o / n * 100) if n else 0
-    return (f'<tr{cls}><td>{d} &nbsp;{e(nm)}</td><td class="n">{fmt(n)}</td>'
-            f'<td class="n">{fmt(o)}</td><td class="n">{pct}%</td>'
-            f'<td class="n">{med}</td></tr>')
-
-dist_table = "".join(dist_row(*r) for r in dist_rows)
-
 hood_rows = "".join(
     f'<tr><td>{e(k)}</td><td class="n">{fmt(v)}</td>'
     f'<td class="n">{fmt(sum(1 for c in win if (c["n"] or "Not recorded")==k and c["s"]))}</td></tr>'
@@ -306,18 +359,22 @@ comparison = f"""
   <strong>{round(n_win/city_n*100)}%</strong> of the empty-basin reports made in San Francisco over
   these two years, and holds <strong>{round(len(op)/city_open*100)}% of every one that is still
   open</strong> &mdash; {fmt(len(op))} of {fmt(city_open)}, more than twice the next district.
-  Its median open case has waited {median_open} days against {int(median_of_medians)} across the
-  eleven districts. Only District {d11[0]}&rsquo;s median is longer, on {d11[3]} open cases.</p>
+  Nearly three in five District 6 reports are still open; in every one of the other ten
+  districts the figure is below one in three. Its median open case has waited {median_open} days against
+  {int(median_of_medians)} across the eleven districts &mdash; the second-longest median in the
+  city, and the longest of any district with more than a handful of open cases. (District
+  {longest_median[0]}&rsquo;s median is {longest_median[3]} days, on {longest_median[2]} open
+  cases.)</p>
 
-  <table class="tight">
-    <thead><tr><th>Supervisorial district</th><th class="n">Reports</th><th class="n">Still open</th>
-    <th class="n">% open</th><th class="n">Median days open</th></tr></thead>
-    <tbody>{dist_table}</tbody>
-  </table>
-  <p class="src">All eleven districts, same period and same query. District is assigned from each
-  report&rsquo;s coordinates against the City&rsquo;s current boundary file &mdash; the 311
-  feed&rsquo;s own district field still carries the pre-2022 lines, and querying it directly
-  returns a larger District 6.</p>
+  <div class="bars">
+    <div class="bhead"><div></div><div>Share of this district&rsquo;s reports still open</div>
+      <div class="r"></div><div class="r">Open / filed</div><div class="r">Median</div></div>
+    {dist_bars}
+  </div>
+  <p class="src">All eleven districts, same period and same query, sorted by the share still open.
+  District is assigned from each report&rsquo;s coordinates against the City&rsquo;s current
+  boundary file &mdash; the 311 feed&rsquo;s own district field still carries the pre-2022 lines,
+  and querying it directly returns a larger District 6.</p>
 
   <div class="twocol">
     <div>
@@ -366,8 +423,9 @@ page_mix = photo_page(
     "Two more streets: China Basin and Howard",
     f"<strong>{fmt(len(china))}</strong> basins on China Basin Street in Mission Bay, "
     f"<strong>all still open</strong> &mdash; seven of them reported on one day, 22 February 2026, "
-    f"and open {max(china_days)} days since. They are followed by basins on Howard Street, where "
-    f"every photographed report in this period is also still open.",
+    f"and open {max(china_days)} days since. Two have been empty long enough that wild fennel has "
+    f"taken them over; the green in those frames is a weed, not a tree. They are followed by "
+    f"basins on Howard Street, where every photographed report in this period is also still open.",
     mix,
     "Addresses run in street-number order, not date order.")
 
@@ -376,16 +434,17 @@ sites = f"""
 <div class="page">
   <h2>The sites already exist</h2>
 
-  <p>District 6 is often told it has too few places to put a tree, or that its streets are too
-  narrow. The City&rsquo;s own reports say otherwise: <strong>{fmt(len(on_main))} of the
-  {fmt(n_win)} empty basins reported here &mdash; half of them &mdash; are on the district&rsquo;s
-  widest thoroughfares</strong>: 6th, 7th, 8th, 9th, 10th, 11th and 12th Streets, and Mission,
-  Howard, Market, Folsom and Harrison. <strong>{fmt(len(on_main_open))}</strong> of those are still
-  open. These are basins that already exist, already cut, already empty.</p>
+  <p>The first thing District 6 is told is that it has too few places to put a tree, or that its
+  streets are too narrow. The City&rsquo;s own reports say otherwise. <strong>{fmt(len(on_main))}
+  of the {fmt(n_win)} empty basins reported here &mdash; half of them &mdash; are on the
+  district&rsquo;s widest thoroughfares</strong>: 6th, 7th, 8th, 9th, 10th, 11th and 12th Streets,
+  and Mission, Howard, Market, Folsom and Harrison. <strong>{fmt(len(on_main_open))}</strong> of
+  those are still open. Not one of them requires a new cut in the pavement.</p>
 
   <p>Beyond them are long stretches of wide sidewalk carrying no basins at all &mdash; and sites
-  the City has itself surveyed, marked out and posted for work, where the pavement was never
-  cut.</p>
+  the City has itself surveyed, marked out and posted for work, where the pavement was never cut.
+  The barricade and white basin outline on the cover of this document stand on 9th Street, two
+  blocks from the frontage below.</p>
 
   <div class="sites-grid">
     <figure><img src="sites/site2.jpg" alt="">
@@ -394,11 +453,10 @@ sites = f"""
     <figure><img src="sites/site3.jpg" alt="">
       <figcaption><b>The same block, at pavement level</b>The sidewalk runs the length of the
       building at full width. There is no basin anywhere along it.</figcaption></figure>
-    <figure><img src="sites/site8.jpg" alt="">
-      <figcaption><b>Approaching Brannan Street &mdash; marked, with a work window posted</b>A San
-      Francisco Public Works barricade (SFDPW&#8209;BSSR) carrying a no&#8209;stopping notice for
-      20&ndash;24 October 2025, weekdays. Utility locates are marked in orange and a basin is laid
-      out in white. The concrete inside the marks is uncut.</figcaption></figure>
+    <figure><img src="sites/site4.jpg" alt="">
+      <figcaption><b>A wide sidewalk beside an elevated roadway</b>The pavement runs at full
+      width the length of the block, past a striped bicycle lane. Neither side of the street
+      carries a tree or a basin.</figcaption></figure>
     <figure><img src="sites/site9.jpg" alt="">
       <figcaption><b>Beneath the freeway viaduct</b>Basins laid out in white along a wide sidewalk
       beside a striped bicycle lane. Neither side of the street carries a
@@ -413,7 +471,7 @@ sites = f"""
 doc = (f'<!doctype html><html><head><meta charset="utf-8">'
        f'<title>{fmt(len(op))} Empty Tree Basins, Still Waiting — Supervisor District 6</title>'
        f'<style>{CSS}</style></head><body>'
-       + cover + findings + comparison + page_langton + page_again + page_mix + sites
+       + cover + sites + findings + comparison + page_langton + page_again + page_mix
        + '</body></html>')
 open(f"{SCR}/exhibit_v2.html", "w").write(doc)
 

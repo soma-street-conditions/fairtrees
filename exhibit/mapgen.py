@@ -9,7 +9,7 @@ HALO      = "#ffffff"
 LABEL     = "#6a706a"
 
 
-def district_map(open_cases, boundaries_path, district="6", width=430, pad=9, labels=3):
+def district_map(open_cases, boundaries_path, district="6", width=560, pad=10, labels=4, fs=9.5):
     b = json.load(open(boundaries_path))
     dfeat = [f for f in b["districts"]["features"]
              if f["properties"]["id"] == district][0]
@@ -83,19 +83,22 @@ def district_map(open_cases, boundaries_path, district="6", width=430, pad=9, la
         cx = sum(p[0] for p in group) / len(group)
         cy = sum(p[1] for p in group) / len(group)
         lx, ly = proj(cx, cy)
-        if not (pad + 16 < lx < width - pad - 16 and pad + 10 < ly < height - pad - 8):
+        if not (pad + 22 < lx < width - pad - 22 and pad + 12 < ly < height - pad - 10):
             continue
         short = name.split("/")[0]
-        common = (f'x="{lx:.1f}" y="{ly:.1f}" font-size="7" text-anchor="middle" '
-                  f'font-family="Helvetica,Arial,sans-serif"')
-        # Halo as a separate underlying pass: paint-order is not honoured by
-        # every SVG renderer, but two stacked text elements are.
-        label_svg += (f'<text {common} fill="none" stroke="#ffffff" stroke-width="2.6" '
-                      f'stroke-linejoin="round">{short}</text>'
-                      f'<text {common} fill="{LABEL}" font-weight="bold">{short}</text>')
+        # A filled plate rather than a stroked copy of the text underneath it:
+        # paint-order is not honoured by every renderer, and two stacked text
+        # elements duplicate the label in the PDF's text layer.
+        w = len(short) * fs * 0.54 + 6
+        label_svg += (f'<rect x="{lx - w / 2:.1f}" y="{ly - fs * 0.95:.1f}" '
+                      f'width="{w:.1f}" height="{fs * 1.35:.1f}" rx="1.5" '
+                      f'fill="#ffffff" fill-opacity="0.82"/>'
+                      f'<text x="{lx:.1f}" y="{ly:.1f}" font-size="{fs}" text-anchor="middle" '
+                      f'font-family="Helvetica,Arial,sans-serif" fill="{LABEL}" '
+                      f'font-weight="bold">{short}</text>')
 
     hair_paths = "".join(f'<path d="{h}"/>' for h in hairs)
-    dots = "".join(f'<circle cx="{proj(x,y)[0]:.1f}" cy="{proj(x,y)[1]:.1f}" r="2.3"/>'
+    dots = "".join(f'<circle cx="{proj(x,y)[0]:.1f}" cy="{proj(x,y)[1]:.1f}" r="2.7"/>'
                    for x, y in pts)
 
     return (
@@ -108,5 +111,5 @@ def district_map(open_cases, boundaries_path, district="6", width=430, pad=9, la
         f'<g clip-path="url(#d{district})">{label_svg}</g>'
         f'<path d="{district_path}" fill="none" stroke="{LAND_EDGE}" stroke-width="1.1" '
         f'stroke-linejoin="round"/>'
-        f'<g fill="{DOT}" fill-opacity="0.9" stroke="{HALO}" stroke-width="0.7">{dots}</g>'
+        f'<g fill="{DOT}" fill-opacity="0.9" stroke="{HALO}" stroke-width="0.8">{dots}</g>'
         f'</svg>')

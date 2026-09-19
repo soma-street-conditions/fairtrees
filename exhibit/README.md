@@ -1,6 +1,6 @@
 # Hearing exhibit generator
 
-Builds a seven-page printable PDF of empty street-tree basin reports for one
+Builds a thirteen-page printable PDF of empty street-tree basin reports for one
 supervisor district, from the same San Francisco 311 data as the tracker.
 
 ```
@@ -10,7 +10,7 @@ supervisor district, from the same San Francisco 311 data as the tracker.
 3   Findings    the mass closure, repeat reports, the locator map, how
                 closed cases were closed
 4   Comparison  all eleven districts as a bar chart, with the table beneath
-5-7 Blocks      photographs grouped by street, twelve to a page
+5-13 Blocks     photographs grouped by street, twelve to a page
 ```
 
 There is no method page. Source, date range, dataset, authorship and how to
@@ -121,6 +121,22 @@ fatal: a staffer who maps the dots finds basins attributed to a district that no
 longer contains them. Reports the feed never geocoded keep the old label and are
 reported separately rather than counted.
 
+## An open case is not an empty basin
+
+This is the document's one real vulnerability, and it has already bitten once.
+1532 Harrison St was photographed as an empty basin, its 311 cases are still
+open, and trees have since been planted there. The address sits in `WITHHELD` in
+`build-exhibit.py` and is kept off every photograph page.
+
+The document's claim is that these cases are "still open," which a reader takes
+to mean the basins are still empty. If a tree was planted while the case stayed
+open, open status does not prove an empty basin, and anyone who finds a second
+example can use it against the whole exhibit. Roughly 110 sites are now shown.
+Walking them and confirming each basin is still empty would turn the weakest
+part of the document into its strongest claim — a sentence no one else at the
+hearing can make. **Do not write that sentence until the walk is actually
+done.**
+
 ## Before filing anything
 
 Every figure is computed at build time rather than typed in, and printed to the
@@ -133,6 +149,24 @@ planted" describes the public record, not the ground: closure notes became far
 terser after about 2015. And district and neighborhood assignment is the City's
 own geocoding, not the author's. Overstating either is the fastest way to lose a
 hearing.
+
+**Keep the register plain.** Two habits crept in and were removed: the
+"it is not X, it is Y" construction, which reads as a formula once you notice it
+repeating, and self-justifying lines like "no figure has been estimated or
+supplied by the author". Say what the thing is. "Every figure comes from the
+City's own open data" does the same work without sounding defensive. Headings
+should carry the finding — "Three in five reports are still open", not "What
+the record shows".
+
+**Lead with what, not when.** The cover used to open with a two-year date range,
+which invites a reader to dismiss the data as old. The window is a strength, it
+shows duration, but it belongs in the attribution line rather than third from
+the top. The cover says "Open cases as of <date>" instead.
+
+**Check every claim against the frame beneath it.** The page 2 footer once said
+the City "has already cut thousands of basins here, and has marked out where the
+next ones should go" — directly under a photograph of spray paint on uncut
+pavement. Spray paint is not a cut basin.
 
 Do not put an uncited statistic in a filing. If a canopy percentage or similar is
 wanted, carry its source with it.

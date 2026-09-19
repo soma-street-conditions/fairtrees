@@ -137,7 +137,7 @@ td.n, th.n { text-align: right; white-space: nowrap; }
    pavement is the point being made. */
 .sites-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10pt 15pt; margin-top: 11pt; }
 .sites-grid figure { margin: 0; }
-.sites-grid img { width: 100%; height: 2.12in; object-fit: contain;
+.sites-grid img { width: 100%; height: 2.78in; object-fit: contain;
                   background: #fff; display: block; }
 .sites-grid figure > img { border-bottom: 0.5pt solid #ddd; padding-bottom: 3pt; }
 .sites-grid figcaption { font-size: 7.6pt; line-height: 1.35; margin-top: 4pt; color: #444;
@@ -383,8 +383,9 @@ sites = f"""
   Howard, Market, Folsom and Harrison. <strong>{fmt(len(on_main_open))}</strong> of those are still
   open. These are basins that already exist, already cut, already empty.</p>
 
-  <p>Beyond them are long stretches of wide sidewalk carrying no basins at all, and sites the
-  City has itself marked and then left unplanted.</p>
+  <p>Beyond them are long stretches of wide sidewalk carrying no basins at all &mdash; and sites
+  the City has itself surveyed, marked out and posted for work, where the pavement was never
+  cut.</p>
 
   <div class="sites-grid">
     <figure><img src="sites/site2.jpg" alt="">
@@ -393,16 +394,19 @@ sites = f"""
     <figure><img src="sites/site3.jpg" alt="">
       <figcaption><b>The same block, at pavement level</b>The sidewalk runs the length of the
       building at full width. There is no basin anywhere along it.</figcaption></figure>
-    <figure><img src="sites/site4.jpg" alt="">
-      <figcaption><b>Beneath the freeway viaduct</b>A wide sidewalk carrying a bicycle share
-      station and a striped bicycle lane, and no trees on either side of the street.</figcaption></figure>
-    <figure><img src="sites/site5.jpg" alt="">
-      <figcaption><b>A site marked and left</b>Survey marks laying out a basin on the pavement. The
-      concrete inside them is uncut and there is no tree.</figcaption></figure>
+    <figure><img src="sites/site8.jpg" alt="">
+      <figcaption><b>Approaching Brannan Street &mdash; marked, with a work window posted</b>A San
+      Francisco Public Works barricade (SFDPW&#8209;BSSR) carrying a no&#8209;stopping notice for
+      20&ndash;24 October 2025, weekdays. Utility locates are marked in orange and a basin is laid
+      out in white. The concrete inside the marks is uncut.</figcaption></figure>
+    <figure><img src="sites/site9.jpg" alt="">
+      <figcaption><b>Beneath the freeway viaduct</b>Basins laid out in white along a wide sidewalk
+      beside a striped bicycle lane. Neither side of the street carries a
+      tree.</figcaption></figure>
   </div>
 
   <div class="foot">The question is not whether District 6 has room for trees. The City has already
-  cut the basins, and in places already marked where the next ones should go.</div>
+  cut thousands of basins here, and has marked out where the next ones should go.</div>
 </div>
 """
 

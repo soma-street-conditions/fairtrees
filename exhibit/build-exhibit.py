@@ -87,121 +87,150 @@ def pretty(iso, yr=True):
 days_open = lambda c: (TODAY - datetime.date.fromisoformat(c["o"])).days
 
 CSS = """
-@page { size: Letter; margin: 0.7in 0.7in 0.8in 0.7in; }
+/* One sans family at two weights. Source Sans 3 is a text face rather than a
+   display one: at 10.5pt in a dense evidence document it holds up where a
+   geometric face (Montserrat, the site's own) goes wide and loose. The brand
+   link is carried by the paper colour and the green instead.
+   The file is the variable roman, so every weight comes from one download. */
+@font-face {
+  font-family: "Source Sans 3";
+  src: url("sourcesans3.woff2") format("woff2");
+  font-weight: 100 900; font-style: normal;
+}
+
+/* One accent colour, used twice: section headings and the cover figures. The
+   coral appears exactly once in the document, on District 6's bar. */
+:root {
+  --paper:    #FAFAFA;
+  --ink:      #1A1A1A;
+  --green:    #35803A;
+  --grey:     #767676;
+  --hair:     #E4E4E4;
+  --coral:    #C9502E;
+}
+
+@page { size: Letter; margin: 0.9in 0.9in 0.85in 0.9in; background: #FAFAFA; }
 * { box-sizing: border-box; }
-body { font-family: Georgia, "Times New Roman", serif; font-size: 10pt; line-height: 1.5;
-       color: #111; margin: 0; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-.page { page-break-after: always; }
+body { font-family: "Source Sans 3", Helvetica, Arial, sans-serif; font-size: 10.5pt;
+       line-height: 1.52; color: var(--ink); background: var(--paper); margin: 0;
+       -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+.page { page-break-after: always; background: var(--paper); }
 .page:last-child { page-break-after: auto; }
-h1 { font-size: 23pt; line-height: 1.15; margin: 0 0 4pt; font-weight: normal; }
-h2 { font-size: 14pt; margin: 0 0 9pt; font-weight: normal; border-bottom: 0.75pt solid #222;
-     padding-bottom: 5pt; }
-h3 { font-size: 10.5pt; margin: 14pt 0 5pt; }
-p { margin: 0 0 9pt; }
-.sub { font-size: 11pt; color: #333; margin-bottom: 2pt; }
-.dateline { font-size: 9.5pt; color: #555; }
-.rule { border-top: 1.5pt solid #222; margin: 13pt 0 15pt; }
-.small { font-size: 8.6pt; }
-.muted { color: #555; }
+
+h1 { font-size: 34pt; line-height: 1.12; margin: 0 0 10pt; font-weight: 700;
+     letter-spacing: -0.018em; }
+/* No rule under a heading: weight and the space above do that work. */
+h2 { font-size: 18pt; margin: 0 0 11pt; font-weight: 700; color: var(--green);
+     letter-spacing: -0.008em; }
+h3 { font-size: 11pt; margin: 15pt 0 5pt; font-weight: 700; }
+p { margin: 0 0 10pt; }
+.sub { font-size: 13pt; color: var(--grey); margin-bottom: 3pt; font-weight: 400; }
+.dateline { font-size: 10pt; color: var(--grey); }
+.rule { border-top: 1pt solid var(--hair); margin: 13pt 0 14pt; }
+.small { font-size: 9pt; }
+.muted { color: var(--grey); }
 
 /* the closure note leads the document */
-.quote { margin: 0 0 6pt; padding-left: 15pt; border-left: 2.5pt solid #1b5e45; }
-.quote p { font-size: 12pt; line-height: 1.5; font-style: italic; margin: 0; }
-.quote .src { font-style: normal; font-size: 8.6pt; color: #555; margin-top: 8pt; }
+.quote { margin: 0 0 6pt; padding-left: 14pt; border-left: 2.5pt solid var(--green); }
+.quote p { font-size: 11.5pt; line-height: 1.5; margin: 0; }
+.quote .src { font-size: 8.5pt; color: var(--grey); margin-top: 8pt; }
 
-/* two figures, set typographically rather than as tiles */
-.figs { display: flex; gap: 30pt; margin: 16pt 0 4pt; border-top: 0.75pt solid #bbb;
-        border-bottom: 0.75pt solid #bbb; padding: 11pt 0; }
+/* the three cover figures: the second thing the eye lands on */
+.figs { display: flex; gap: 26pt; margin: 15pt 0 4pt; padding: 0; }
 .figs div { flex: 1; }
-.figs .n { font-size: 27pt; line-height: 1; }
-.figs.three { gap: 19pt; }
-.figs.three .n { font-size: 21pt; }
-.figs.three .t { font-size: 8.5pt; line-height: 1.38; }
-.figs .t { font-size: 9pt; color: #444; margin-top: 5pt; }
+.figs .n { font-size: 42pt; line-height: 0.95; font-weight: 700; color: var(--green);
+           letter-spacing: -0.03em; }
+.figs .t { font-size: 9pt; line-height: 1.44; color: var(--grey); margin-top: 7pt; }
+.figs.three .n { font-size: 34pt; }
 
-table { width: 100%; border-collapse: collapse; font-size: 9pt; }
-th { text-align: left; font-weight: normal; font-style: italic; color: #555;
-     border-bottom: 0.75pt solid #999; padding: 4pt 5pt; }
-td { padding: 3.5pt 5pt; border-bottom: 0.5pt solid #ddd; }
+table { width: 100%; border-collapse: collapse; font-size: 9.5pt; }
+th { text-align: left; font-weight: 700; font-size: 9pt; color: var(--ink);
+     border-bottom: 1pt solid var(--hair); padding: 4pt 5pt; }
+td { padding: 3.5pt 5pt; border-bottom: 1pt solid var(--hair); }
 td.n, th.n { text-align: right; white-space: nowrap; }
 
-.grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 9pt 7pt; margin-top: 12pt; }
-.cell img { width: 100%; height: 1.68in; object-fit: cover; display: block;
-            border: 0.5pt solid #bbb; background: #eee; }
-.cap { font-size: 7.8pt; line-height: 1.3; margin-top: 2.5pt; font-family: Helvetica, Arial, sans-serif; }
-.cap b { display: block; }
-.cap span { display: block; color: #555; }
-.cap .o { color: #7d1d1a; font-weight: bold; }
-.foot { font-size: 8pt; color: #666; border-top: 0.5pt solid #ccc; padding-top: 5pt; margin-top: 9pt; }
-.lede { font-size: 10pt; }
-/* Context photographs: shown whole rather than cropped, since the width of the
-   pavement is the point being made. */
-.sites-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10pt 15pt; margin-top: 11pt; }
-.sites-grid figure { margin: 0; }
-.sites-grid img { width: 100%; height: 2.78in; object-fit: contain;
-                  background: #fff; display: block; }
-.sites-grid figure > img { border-bottom: 0.5pt solid #ddd; padding-bottom: 3pt; }
-.sites-grid figcaption { font-size: 8.2pt; line-height: 1.35; margin-top: 4pt; color: #444;
-                         font-family: Helvetica, Arial, sans-serif; }
-.sites-grid figcaption b { display: block; color: #111; }
+/* Captions run two lines of content plus the case number, with the date
+   abbreviated so nothing wraps -- a wrapped date sets every row in the grid to
+   a different height and the page goes ragged. */
+.grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 9pt 10pt; margin-top: 11pt; }
+.cell img { width: 100%; height: 1.80in; object-fit: cover; display: block;
+            background: var(--hair); }
+.cap { font-size: 8.5pt; line-height: 1.3; margin-top: 4pt; }
+.cap b { display: block; font-weight: 700; }
+.cap .when { display: block; }
+.cap .id { display: block; font-size: 7.5pt; color: var(--grey); }
+.foot { font-size: 8pt; color: var(--grey); border-top: 1pt solid var(--hair);
+        padding-top: 5pt; margin-top: 9pt; }
+.lede { font-size: 10.5pt; }
 
-/* display findings, matching the weight of the cover figures */
-.display { border-top: 0.75pt solid #bbb; border-bottom: 0.75pt solid #bbb;
-           padding: 11pt 0; margin: 14pt 0; }
-.display .dnum { font-size: 30pt; line-height: 1; }
-.display .dline { font-size: 15pt; line-height: 1.25; }
-.display .dtxt { font-size: 9.2pt; color: #333; margin-top: 7pt; }
-.src { font-size: 7.8pt; color: #666; margin-top: 5pt; }
-table.tight td, table.tight th { padding: 2.8pt 5pt; }
-tr.me td { font-weight: bold; background: #f0f0ec; }
-.twocol { display: flex; gap: 20pt; margin-top: 11pt; align-items: flex-start; }
-/* Flex items default to min-width:auto, which lets the map force the
-   column wider than its share instead of scaling down into it. */
+/* Context photographs, one row of four at a single ratio: two landscape and
+   two portrait in a 2x2 leaves holes down the column. */
+.sites-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10pt; margin-top: 14pt; }
+.sites-grid figure { margin: 0; }
+.sites-grid img { width: 100%; height: 3.15in; object-fit: cover; display: block;
+                  background: var(--hair); }
+.sites-grid figcaption { font-size: 8.2pt; line-height: 1.36; margin-top: 5pt; color: var(--ink); }
+.sites-grid figcaption b { display: block; font-weight: 700; }
+
+/* display findings */
+.display { padding: 0; margin: 15pt 0; }
+.display .dnum { font-size: 28pt; line-height: 1; font-weight: 700; color: var(--green);
+                 letter-spacing: -0.02em; }
+.display .dline { font-size: 17pt; line-height: 1.24; font-weight: 700; color: var(--green); }
+.display .dtxt { font-size: 9.5pt; color: var(--ink); margin-top: 8pt; }
+.src { font-size: 8pt; color: var(--grey); margin-top: 6pt; }
+table.tight { font-size: 8.6pt; }
+table.tight td, table.tight th { padding: 2.6pt 5pt; }
+tr.me td { font-weight: 700; }
+.twocol { display: flex; gap: 20pt; margin-top: 12pt; align-items: flex-start; }
 .twocol > div { min-width: 0; }
-.twocol > div:first-child { flex: 1.35; }
+.twocol > div:first-child { flex: 1.3; }
 .twocol > div:last-child { flex: 1; }
-.twocol svg { display: block; margin-top: 4pt; height: 3.3in; width: auto; max-width: 100%; }
+.twocol svg { display: block; margin-top: 4pt; height: 2.15in; width: auto; max-width: 100%; }
 
 /* cover: the closure note and the photograph that answers it, side by side */
-.coverflex { display: flex; gap: 19pt; align-items: flex-start; }
+.coverflex { display: flex; gap: 18pt; align-items: flex-start; margin-top: 2pt; }
 .coverflex > div, .coverflex > figure { min-width: 0; }
-.coverflex > div { flex: 1.62; }
+.coverflex > div { flex: 1.6; }
 .coverfig { flex: 1; margin: 0; }
-.coverfig img { width: 100%; height: 3.35in; object-fit: cover; object-position: 50% 60%;
-                display: block; border: 0.5pt solid #bbb; }
-.coverfig figcaption { font-size: 7.9pt; line-height: 1.36; margin-top: 4pt; color: #444;
-                       font-family: Helvetica, Arial, sans-serif; }
-.coverfig figcaption b { display: block; color: #111; }
-.coverflex .quote p { font-size: 11pt; }
-.claim { font-size: 13.5pt; line-height: 1.3; margin: 13pt 0 0; }
+.coverfig img { width: 100%; height: 2.62in; object-fit: cover; object-position: 50% 60%;
+                display: block; }
+.coverfig figcaption { font-size: 8.2pt; line-height: 1.38; margin-top: 5pt; color: var(--ink); }
+.coverfig figcaption b { display: block; font-weight: 700; }
+.coverflex .quote p { font-size: 10.5pt; }
+.claim { font-size: 15pt; line-height: 1.3; margin: 13pt 0 0; font-weight: 700; }
 
-/* districts, sorted, as a chart rather than a table the reader must search */
-.bhead, .brow { display: grid; grid-template-columns: 50pt 1fr 25pt 56pt 44pt;
-                align-items: center; gap: 8pt; }
-.bhead { font-size: 8.4pt; font-style: italic; color: #555; padding-bottom: 4pt;
-         border-bottom: 0.75pt solid #999; }
-.brow { font-size: 8.8pt; padding: 2.6pt 0; border-bottom: 0.5pt solid #e8e8e4; }
-.bars { margin: 13pt 0 5pt; }
-.btrack { background: #edede9; height: 9.5pt; }
-.bfill { background: #9aa39c; height: 100%; }
-.brow.me { font-weight: bold; }
-.brow.me .bfill { background: #8c2320; }
-.bv, .bn, .bmed, .bhead .r { text-align: right; }
-.bn, .bmed { color: #555; font-size: 8.2pt; }
-.brow.me .bn, .brow.me .bmed { color: #222; }
-
+/* One picture, no reading required. Coral appears here and nowhere else. */
+.bhead, .brow { display: grid; grid-template-columns: 58pt 1fr 26pt;
+                align-items: center; gap: 9pt; }
+.bhead { font-size: 8.4pt; color: var(--grey); padding-bottom: 5pt; }
+.brow { font-size: 9.5pt; padding: 3pt 0; }
+.bars { margin: 4pt 0 16pt; max-width: 76%; }
+.btrack { background: transparent; height: 13pt; }
+.bfill { background: var(--hair); height: 100%; }
+.brow.me { font-weight: 700; }
+.brow.me .bfill { background: var(--coral); }
+.bv { text-align: right; }
 """
 
+def short_date(iso):
+    """26 Dec 2025. The full month name wraps in a four-across grid, and a
+    wrapped date sets every row to a different height."""
+    return datetime.date.fromisoformat(iso).strftime("%-d %b %Y")
+
 def cell(c):
+    state = (f'open {days_open(c)} days' if c["s"] else e(c["r"][:22]).lower())
     return (f'<div class="cell"><img src="print/{c["id"]}.jpg" alt="">'
             f'<div class="cap"><b>{e(c["a"])}</b>'
-            f'<span>Reported {pretty(c["o"], False)} {c["o"][:4]}</span>'
-            f'<span class="o">{"Open " + str(days_open(c)) + " days" if c["s"] else e(c["r"][:26])}</span>'
-            f'<span>#{e(c["id"])}</span></div></div>')
+            f'<span class="when">{short_date(c["o"])} &middot; {state}</span>'
+            f'<span class="id">#{e(c["id"])}</span></div></div>')
 
-def photo_page(title, lede, items, foot, cols=5):
+PER_PAGE = 12
+
+def photo_page(title, lede, items, foot, cols=4):
+    shown = items[:PER_PAGE]
     return (f'<div class="page"><h2>{title}</h2><p class="lede">{lede}</p>'
-            f'<div class="grid" style="grid-template-columns:repeat({cols},1fr)">{"".join(cell(c) for c in items)}</div>'
+            f'<div class="grid" style="grid-template-columns:repeat({cols},1fr)">{"".join(cell(c) for c in shown)}</div>'
             f'<div class="foot">{foot}</div></div>')
 
 # ---------------------------------------------------------------- districts
@@ -227,11 +256,18 @@ def bar_row(r):
     cls = "brow me" if d == "6" else "brow"
     return (f'<div class="{cls}"><div class="bl">District {d}</div>'
             f'<div class="btrack"><div class="bfill" style="width:{pct:.0f}%"></div></div>'
-            f'<div class="bv">{pct:.0f}%</div>'
-            f'<div class="bn">{fmt(o)} of {fmt(n)}</div>'
-            f'<div class="bmed">{med} d</div></div>')
+            f'<div class="bv">{pct:.0f}%</div></div>')
 
 dist_bars = "".join(bar_row(r) for r in sorted(dist_rows, key=pct_open, reverse=True))
+
+def dist_row(r):
+    d, n, o, med = r
+    cls = ' class="me"' if d == "6" else ""
+    return (f'<tr{cls}><td>District {d}</td><td class="n">{fmt(n)}</td>'
+            f'<td class="n">{fmt(o)}</td><td class="n">{pct_open(r):.0f}%</td>'
+            f'<td class="n">{med}</td></tr>')
+
+dist_table = "".join(dist_row(r) for r in sorted(dist_rows, key=pct_open, reverse=True))
 
 # ---------------------------------------------------------------- page 1
 cover = f"""
@@ -282,13 +318,13 @@ cover = f"""
 
   <p class="claim">The sites already exist. They are already cut, and already empty.</p>
 
-  <p class="small muted" style="margin-top:14pt">Every case in this document carries its 311
+  <p class="small muted" style="margin-top:11pt">Every case in this document carries its 311
   case number and can be verified independently at
   mobile311.sfgov.org/tickets/&lt;case&nbsp;number&gt;. The complete set of
   {fmt(sum(1 for c in win if has(c)))} photographs is published at fairtrees.org and is
   available on request.</p>
 
-  <p class="small muted" style="margin-top:22pt">Prepared by {e(SUBMITTER)}, {e(ORG)} &mdash;
+  <p class="small muted" style="margin-top:13pt">Prepared by {e(SUBMITTER)}, {e(ORG)} &mdash;
   {pretty(TODAY.isoformat())}. Compiled entirely from the City's own open data; no figure has
   been estimated or supplied by the author.</p>
 </div>
@@ -334,6 +370,22 @@ findings = f"""
     has been closed.</div>
   </div>
 
+  <div class="twocol">
+    <div>
+      <h3 style="margin-top:0">Where the open reports are</h3>
+      {MAP_SVG}
+      <p class="src">One dot per open report. Treasure Island, also in District 6, is not shown;
+      none of its {fmt(sum(1 for c in win if c["n"]=="Treasure Island"))} reports is open.</p>
+    </div>
+    <div>
+      <h3 style="margin-top:0">By neighborhood</h3>
+      <table>
+        <thead><tr><th>Neighborhood</th><th class="n">Reports</th><th class="n">Open</th></tr></thead>
+        <tbody>{hood_rows}</tbody>
+      </table>
+    </div>
+  </div>
+
   <h3>How the {fmt(len(cl))} closed reports were closed</h3>
   <p>Of the {fmt(len(cl))} reports the City closed in this period,
   <strong>{fmt(n_canc)} ({round(n_canc/len(cl)*100)}%)</strong> carry the note
@@ -368,30 +420,20 @@ comparison = f"""
 
   <div class="bars">
     <div class="bhead"><div></div><div>Share of this district&rsquo;s reports still open</div>
-      <div class="r"></div><div class="r">Open / filed</div><div class="r">Median</div></div>
+      <div></div></div>
     {dist_bars}
   </div>
-  <p class="src">All eleven districts, same period and same query, sorted by the share still open.
-  District is assigned from each report&rsquo;s coordinates against the City&rsquo;s current
-  boundary file &mdash; the 311 feed&rsquo;s own district field still carries the pre-2022 lines,
-  and querying it directly returns a larger District 6.</p>
 
-  <div class="twocol">
-    <div>
-      <h3 style="margin-top:4pt">Where the open reports are</h3>
-      {MAP_SVG}
-      <p class="src">One dot per open report. Treasure Island, also in District 6, is not shown;
-      none of its {fmt(sum(1 for c in win if c["n"]=="Treasure Island"))} reports is open.</p>
-    </div>
-    <div>
-      <h3 style="margin-top:4pt">By neighborhood</h3>
-      <table>
-        <thead><tr><th>Neighborhood</th><th class="n">Reports</th><th class="n">Open</th></tr></thead>
-        <tbody>{hood_rows}</tbody>
-      </table>
-      <p class="src">Every report carries a City neighborhood label.</p>
-    </div>
-  </div>
+  <table class="tight">
+    <thead><tr><th>District</th><th class="n">Reports</th><th class="n">Still open</th>
+    <th class="n">% open</th><th class="n">Median days open</th></tr></thead>
+    <tbody>{dist_table}</tbody>
+  </table>
+  <p class="src">All eleven districts, same period and same query. District is assigned from each
+  report&rsquo;s coordinates against the City&rsquo;s current boundary file &mdash; the 311
+  feed&rsquo;s own district field still carries the pre-2022 lines, and querying it directly
+  returns a larger District 6.</p>
+
 </div>
 """
 
@@ -399,12 +441,12 @@ lang_open = sum(1 for c in langton if c["s"])
 lang_days = sorted(days_open(c) for c in langton if c["s"])
 page_langton = photo_page(
     "One block: Langton Street",
-    f"Langton Street is a two-block alley between Folsom and Howard. These "
-    f"<strong>{fmt(len(langton))}</strong> basins were photographed by residents along it; "
+    f"Langton Street is a two-block alley between Folsom and Howard. Residents photographed "
+    f"<strong>{fmt(len(langton))}</strong> empty basins along it and "
     f"<strong>all {fmt(lang_open)} are still open</strong>, between {min(lang_days)} and "
-    f"{max(lang_days)} days after they were reported. Nine were reported on a single day, "
-    f"19 March 2026. Three addresses appear twice, having been reported once in December 2025 "
-    f"and again in March 2026 &mdash; both reports still open.",
+    f"{max(lang_days)} days after they were reported. Twelve are shown here, in street-number "
+    f"order. Three addresses appear twice: reported once in December 2025, again in March 2026, "
+    f"both reports still open.",
     langton,
     "Every photograph was taken and submitted by a resident as part of their own 311 report.")
 
@@ -422,10 +464,10 @@ china_days = sorted(days_open(c) for c in china if c["s"])
 page_mix = photo_page(
     "Two more streets: China Basin and Howard",
     f"<strong>{fmt(len(china))}</strong> basins on China Basin Street in Mission Bay, "
-    f"<strong>all still open</strong> &mdash; seven of them reported on one day, 22 February 2026, "
-    f"and open {max(china_days)} days since. Two have been empty long enough that wild fennel has "
-    f"taken them over; the green in those frames is a weed, not a tree. They are followed by "
-    f"basins on Howard Street, where every photographed report in this period is also still open.",
+    f"<strong>all still open</strong> &mdash; seven reported on one day, 22 February 2026, and "
+    f"open {max(china_days)} days since. Two have been empty long enough that wild fennel has "
+    f"filled them; the green in those frames is a weed, not a tree. They are followed by basins "
+    f"on Howard Street, where every photographed report in this period is also still open.",
     mix,
     "Addresses run in street-number order, not date order.")
 
@@ -448,19 +490,17 @@ sites = f"""
 
   <div class="sites-grid">
     <figure><img src="sites/site2.jpg" alt="">
-      <figcaption><b>9th Street at Brannan Street</b>An entire block frontage, and a sidewalk wide
-      enough throughout, carrying no street tree and no basin.</figcaption></figure>
+      <figcaption><b>9th Street at Brannan Street</b>An entire block frontage, wide throughout,
+      carrying no street tree and no basin.</figcaption></figure>
     <figure><img src="sites/site3.jpg" alt="">
-      <figcaption><b>The same block, at pavement level</b>The sidewalk runs the length of the
-      building at full width. There is no basin anywhere along it.</figcaption></figure>
+      <figcaption><b>The same block, at pavement level</b>Full width the length of the building.
+      No basin anywhere along it.</figcaption></figure>
     <figure><img src="sites/site4.jpg" alt="">
-      <figcaption><b>A wide sidewalk beside an elevated roadway</b>The pavement runs at full
-      width the length of the block, past a striped bicycle lane. Neither side of the street
-      carries a tree or a basin.</figcaption></figure>
+      <figcaption><b>A wide sidewalk beside an elevated roadway</b>Full width the length of the
+      block, past a bicycle lane. No tree or basin on either side.</figcaption></figure>
     <figure><img src="sites/site9.jpg" alt="">
-      <figcaption><b>Beneath the freeway viaduct</b>Basins laid out in white along a wide sidewalk
-      beside a striped bicycle lane. Neither side of the street carries a
-      tree.</figcaption></figure>
+      <figcaption><b>Beneath the freeway viaduct</b>Basins laid out in white along a wide
+      sidewalk. Neither side of the street carries a tree.</figcaption></figure>
   </div>
 
   <div class="foot">The question is not whether District 6 has room for trees. The City has already

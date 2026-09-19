@@ -1,12 +1,14 @@
 """Locator map: District 6 with neighbourhood structure and one dot per open basin."""
 import json, math
 
-LAND      = "#eef0ea"   # paper-warm land
-LAND_EDGE = "#5d6f66"   # muted green-grey district edge
-HAIR      = "#c3c9c0"   # neighbourhood hairlines inside the district
-DOT       = "#a8302c"   # same critical red the document uses for "open"
-HALO      = "#ffffff"
-LABEL     = "#6a706a"
+# The document spends its one accent colour on District 6's bar, so the map is
+# drawn entirely in ink and greys.
+LAND      = "#F0F0F0"   # a shade off the #FAFAFA page, so the shape reads
+LAND_EDGE = "#1A1A1A"
+HAIR      = "#DCDCDC"   # neighbourhood hairlines inside the district
+DOT       = "#1A1A1A"
+HALO      = "#FAFAFA"
+LABEL     = "#767676"
 
 
 def district_map(open_cases, boundaries_path, district="6", width=560, pad=10, labels=4, fs=9.5):
@@ -92,9 +94,9 @@ def district_map(open_cases, boundaries_path, district="6", width=560, pad=10, l
         w = len(short) * fs * 0.54 + 6
         label_svg += (f'<rect x="{lx - w / 2:.1f}" y="{ly - fs * 0.95:.1f}" '
                       f'width="{w:.1f}" height="{fs * 1.35:.1f}" rx="1.5" '
-                      f'fill="#ffffff" fill-opacity="0.82"/>'
+                      f'fill="#FAFAFA" fill-opacity="0.85"/>'
                       f'<text x="{lx:.1f}" y="{ly:.1f}" font-size="{fs}" text-anchor="middle" '
-                      f'font-family="Helvetica,Arial,sans-serif" fill="{LABEL}" '
+                      f'font-family="Source Sans 3,Helvetica,Arial,sans-serif" fill="{LABEL}" '
                       f'font-weight="bold">{short}</text>')
 
     hair_paths = "".join(f'<path d="{h}"/>' for h in hairs)

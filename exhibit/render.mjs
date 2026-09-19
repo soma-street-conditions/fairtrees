@@ -16,9 +16,9 @@ const imgs = await p.evaluate(async () => {
   return { total: l.length, broken: l.filter(i => !i.naturalWidth).length };
 });
 await p.pdf({ path: "D6-Empty-Tree-Basins.pdf", format: "Letter", printBackground: true,
-  margin: { top: "0.7in", bottom: "0.8in", left: "0.7in", right: "0.7in" },
+  margin: { top: "0.9in", bottom: "0.85in", left: "0.9in", right: "0.9in" },
   displayHeaderFooter: true, headerTemplate: "<div></div>",
-  footerTemplate: `<div style="width:100%;font-size:7.5pt;color:#777;font-family:Georgia,serif;padding:0 0.7in;display:flex;justify-content:space-between;">
+  footerTemplate: `<div style="width:100%;font-size:8pt;color:#767676;font-family:Helvetica,Arial,sans-serif;padding:0 0.9in;display:flex;justify-content:space-between;">
     <span>${TITLE}</span>
     <span><span class="pageNumber"></span> / <span class="totalPages"></span></span></div>` });
 console.log(`images=${imgs.total} broken=${imgs.broken} errors=${errs.length ? errs.slice(0,3) : "none"}`);

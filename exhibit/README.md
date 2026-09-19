@@ -6,11 +6,11 @@ supervisor district, from the same San Francisco 311 data as the tracker.
 ```
 1   Cover       the City's own closure note, a marked-but-uncut basin beside
                 it, and three headline figures
-2   Sites       the "no room for trees" rebuttal, with context photographs
-3   Findings    the mass closure, repeat reports, how closed cases were closed
-4   Comparison  all eleven districts as a sorted chart, a locator map,
-                neighbourhoods
-5-7 Blocks      photographs grouped by street, in street-number order
+2   Sites       the "no room for trees" rebuttal, four context photographs
+3   Findings    the mass closure, repeat reports, the locator map, how
+                closed cases were closed
+4   Comparison  all eleven districts as a bar chart, with the table beneath
+5-7 Blocks      photographs grouped by street, twelve to a page
 ```
 
 There is no method page. Source, date range, dataset, authorship and how to
@@ -26,6 +26,8 @@ directly gets a larger District 6 and concludes the exhibit is wrong.
 python3 exhibit/fetch-photos.py     # resumable; unwraps photos from the 311 portal
 python3 exhibit/build-exhibit.py    # writes exhibit_v2.html, prints every figure it used
 node    exhibit/render.mjs          # renders to PDF via headless Chromium
+
+python3 exhibit/canopy-deficit.py   # the canopy argument, separately
 ```
 
 Paths at the top of each script point at a scratch directory; set them to
@@ -48,6 +50,26 @@ by how many are still open.
 auto-generated. The completeness objection is answered in one sentence in the
 method section: the full photographic set is published on the site and available
 on request.
+
+**One typeface, two weights, one accent colour.** Source Sans 3 rather than the
+site's Montserrat: at 10.5pt in a dense document a geometric display face goes
+wide and loose, and the brand link is carried by the paper colour instead. The
+green is spent on section headings and the three cover figures; the coral
+appears exactly once in the document, on District 6's bar. A document that uses
+colour once reads as confident; one that uses it throughout reads as agitated,
+and an earlier draft set "Open 183 days" in red sixty times over.
+
+**No rules under headings, and no red anywhere.** A horizontal line under every
+section head is a report convention that ages the document. Weight and the space
+above do that work. Days-open figures are bold ink, not an error state.
+
+**Abbreviate the dates in captions.** "Reported 26 December 2025" wraps in a
+four-across grid, which sets every row to a different height and makes the page
+look ragged. `26 Dec 2025 · open 266 days` on one line keeps the grid locked.
+
+**Four across, twelve to a page.** At five across the basin — the thing the
+reader is meant to look at — stops being legible. Four fits three rows at 0.9in
+margins, so a photo page carries twelve and the lede says so.
 
 **Put a photograph on page 1, and the rebuttal on page 2.** Attention is highest
 on the first page and falls off fast, so neither should be spent on prose. The
@@ -114,6 +136,16 @@ hearing.
 
 Do not put an uncited statistic in a filing. If a canopy percentage or similar is
 wanted, carry its source with it.
+
+`canopy-deficit.py` is the other half of the argument and deliberately separate
+from the exhibit: the hearing document is about 151 confirmed-empty basins, and
+the canopy deficit belongs in a covering letter. Read its own header before
+using its numbers. The short version is that **the tree-count framing loses** —
+three of District 6's four core neighbourhoods have more inventoried trees per
+acre than the citywide average, because that average includes Golden Gate Park
+and the Presidio. The defensible claim is canopy area, which needs no
+assumption; the conversion to a tree count does, so it is reported as a range
+and the floor is the figure to quote.
 
 Two traps this document has already fallen into, worth re-checking each build.
 The district median is the *second*-longest in the city; the longest belongs to a

@@ -7,6 +7,12 @@
 <meta name="description" content="Every empty street-tree basin reported to San Francisco 311, with photographic evidence, filterable by supervisor district and neighborhood.">
 <meta name="color-scheme" content="light dark">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🌳</text></svg>">
+<!-- Montserrat is the fairtrees.org typeface, served from this origin rather
+     than from Google: one fewer third party, no request that leaks a reader of
+     a City-records page to an ad network, and it still renders if fonts.
+     googleapis.com is blocked. Both files are the variable face, so every
+     weight comes out of the one download. -->
+<link rel="preload" href="fonts/montserrat.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="stylesheet" href="styles.css">
 <link rel="preload" href="api/cases" as="fetch" crossorigin>
 <meta property="og:title" content="SF Empty Tree Basin Tracker">

@@ -1,44 +1,76 @@
 /* ===========================================================================
    FairTrees — Empty Basin Tracker
-   Tokens follow the project's data-viz palette: system sans throughout, one
-   sequential hue for magnitude bars, reserved status colours for case state.
+
+   Styled to fairtrees.org: Montserrat, an off-white plane, and cards drawn as
+   black-outlined panels with a hard offset shadow, filled from the site's
+   pastel set (green, amber, cyan, coral, lilac).
+
+   Two rules the brand does not get to break, because this page carries data
+   the brand site does not:
+
+   1. Case status stays a reserved colour. Coral is the brand's warm accent,
+      but it fails contrast on white at body size, so "still open" keeps a
+      true red. The pastels are chrome; they never encode a value.
+   2. Internal divisions (table rows, field groups) stay hairline grey. The
+      2px black outline is for the edge of a panel only — applied to every
+      rule it turns a 250-row table into a grid of boxes.
    =========================================================================== */
 
 :root {
   color-scheme: light;
 
-  --plane:          #f9f9f7;
-  --surface:        #fcfcfb;
-  --surface-sunk:   #f2f1ed;
-  --ink:            #0b0b0b;
-  --ink-2:          #52514e;
-  --ink-muted:      #898781;
-  --rule:           #e1e0d9;
-  --rule-strong:    #c3c2b7;
-  --ring:           rgba(11, 11, 11, 0.10);
+  --plane:          #fafafa;
+  --surface:        #ffffff;
+  --surface-sunk:   #f1f0f4;
+  --ink:            #000000;
+  --ink-2:          #3c3b42;
+  --ink-muted:      #6e6d76;
+  --rule:           #e2e1e6;
+  --rule-strong:    #c2c1c9;
+  --ring:           rgba(0, 0, 0, 0.12);
 
-  /* Brand chrome. Deliberately distinct from the series hue below so a brand
-     colour never reads as a data series. */
-  --brand:          #1b5e45;
-  --brand-ink:      #ffffff;
-  --brand-wash:     #e8f0ec;
+  /* The panel edge. fairtrees.org draws every card as a black-outlined block
+     with a hard offset shadow and no blur; that outline is the brand. */
+  --outline:        #000000;
+  --outline-w:      2px;
 
-  /* Magnitude bars are a single series, so a single hue. */
-  --series-1:       #2a78d6;
-  --series-1-wash:  #e8f0fc;
+  /* Brand chrome, taken from the live site's button and panel fills. */
+  --brand:          #5cb85c;
+  --brand-hover:    #449d44;
+  --brand-ink:      #000000;
+  --brand-wash:     #e7f4e7;
+  --amber:          #fedb8a;
+  --amber-2:        #fecb5a;
+  --cyan:           #bff6fd;
+  --cyan-2:         #9ee6ed;
+  --coral:          #ff8c69;
+  --coral-2:        #ff7f50;
+  --lilac:          #c3a0fe;
 
-  --status-open:    #d03b3b;  /* critical — an unresolved hazard */
-  --status-closed:  #898781;
-  --status-good:    #0ca30c;  /* a tree was actually planted */
+  /* Magnitude bars are a single series, so a single hue — the brand lilac,
+     which no status colour uses. */
+  --series-1:       #a578f7;
+  --series-1-wash:  #efe6ff;
 
-  --shadow-sm: 0 1px 2px rgba(11, 11, 11, 0.05);
-  --shadow-md: 0 4px 16px rgba(11, 11, 11, 0.08);
-  --shadow-lg: 0 18px 50px rgba(11, 11, 11, 0.18);
+  /* Status is not brand. Coral reads as a warning but only clears 2.3:1 on
+     white, so the open state keeps a red that passes at body size. */
+  --status-open:    #cf3016;  /* critical — an unresolved hazard */
+  --status-closed:  #6e6d76;
+  --status-good:    #1f8f2f;  /* a tree was actually planted */
 
-  --radius: 10px;
+  /* Hard offset, no blur: the shadow is a drawn edge, not depth. */
+  --shadow-sm: 2px 2px 0 var(--outline);
+  --shadow-md: 4px 4px 0 var(--outline);
+  --shadow-lg: 0 18px 50px rgba(0, 0, 0, 0.3);
+
+  /* The fine grid the site lays over its coloured panels. */
+  --hatch: url('data:image/svg+xml;charset=utf8,%3Csvg xmlns="http://www.w3.org/2000/svg" width="32" height="32"%3E%3Cpath d="M32 0H0v32" stroke="rgba(0,0,0,0.07)" stroke-width="1" fill="none"/%3E%3C/svg%3E');
+  --hatch-size: 32px 32px;
+
+  --radius: 8px;      /* 0.5rem, as on the site */
   --radius-sm: 6px;
   --wrap: 1280px;
-  --font: system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font: "Montserrat", system-ui, -apple-system, "Segoe UI", sans-serif;
 }
 
 /* Dark mode is a selected set of steps, not an inversion. Declared under both
@@ -46,48 +78,87 @@
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
     color-scheme: dark;
-    --plane:        #0d0d0d;
-    --surface:      #1a1a19;
-    --surface-sunk: #141413;
+    --plane:        #100f13;
+    --surface:      #1b1a20;
+    --surface-sunk: #161519;
     --ink:          #ffffff;
-    --ink-2:        #c3c2b7;
-    --ink-muted:    #898781;
-    --rule:         #2c2c2a;
-    --rule-strong:  #383835;
-    --ring:         rgba(255, 255, 255, 0.10);
-    --brand:        #4ea585;
-    --brand-ink:    #07140f;
-    --brand-wash:   #16241f;
-    --series-1:     #3987e5;
-    --series-1-wash:#15233a;
-    --status-open:  #e66767;
-    --status-good:  #0ca30c;
-    --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
-    --shadow-md: 0 4px 16px rgba(0, 0, 0, 0.5);
-    --shadow-lg: 0 18px 50px rgba(0, 0, 0, 0.65);
+    --ink-2:        #c8c6d0;
+    --ink-muted:    #918f9b;
+    --rule:         #2e2d35;
+    --rule-strong:  #3c3b45;
+    --ring:         rgba(255, 255, 255, 0.12);
+    --outline:      #4a4854;
+    --outline-w:    1.5px;
+    --brand:        #6cc96c;
+    --brand-hover:  #57b657;
+    --brand-ink:    #06170a;
+    --brand-wash:   #16281a;
+    --amber:        #4a3c1c;
+    --amber-2:      #6a5526;
+    --cyan:         #17383d;
+    --cyan-2:       #1f4c53;
+    --coral:        #4d2418;
+    --coral-2:      #6b3020;
+    --lilac:        #362a52;
+    --series-1:     #a578f7;
+    --series-1-wash:#2a2140;
+    --status-open:  #ff7a5c;
+    --status-closed:#918f9b;
+    --status-good:  #5ac96a;
+    --hatch:        none;
+    --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.5);
+    --shadow-md: 0 4px 16px rgba(0, 0, 0, 0.6);
+    --shadow-lg: 0 18px 50px rgba(0, 0, 0, 0.7);
   }
 }
 :root[data-theme="dark"] {
   color-scheme: dark;
-  --plane:        #0d0d0d;
-  --surface:      #1a1a19;
-  --surface-sunk: #141413;
+  --plane:        #100f13;
+  --surface:      #1b1a20;
+  --surface-sunk: #161519;
   --ink:          #ffffff;
-  --ink-2:        #c3c2b7;
-  --ink-muted:    #898781;
-  --rule:         #2c2c2a;
-  --rule-strong:  #383835;
-  --ring:         rgba(255, 255, 255, 0.10);
-  --brand:        #4ea585;
-  --brand-ink:    #07140f;
-  --brand-wash:   #16241f;
-  --series-1:     #3987e5;
-  --series-1-wash:#15233a;
-  --status-open:  #e66767;
-  --status-good:  #0ca30c;
-  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
-  --shadow-md: 0 4px 16px rgba(0, 0, 0, 0.5);
-  --shadow-lg: 0 18px 50px rgba(0, 0, 0, 0.65);
+  --ink-2:        #c8c6d0;
+  --ink-muted:    #918f9b;
+  --rule:         #2e2d35;
+  --rule-strong:  #3c3b45;
+  --ring:         rgba(255, 255, 255, 0.12);
+  --outline:      #4a4854;
+  --outline-w:    1.5px;
+  --brand:        #6cc96c;
+  --brand-hover:  #57b657;
+  --brand-ink:    #06170a;
+  --brand-wash:   #16281a;
+  --amber:        #4a3c1c;
+  --amber-2:      #6a5526;
+  --cyan:         #17383d;
+  --cyan-2:       #1f4c53;
+  --coral:        #4d2418;
+  --coral-2:      #6b3020;
+  --lilac:        #362a52;
+  --series-1:     #a578f7;
+  --series-1-wash:#2a2140;
+  --status-open:  #ff7a5c;
+  --status-closed:#918f9b;
+  --status-good:  #5ac96a;
+  --hatch:        none;
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.5);
+  --shadow-md: 0 4px 16px rgba(0, 0, 0, 0.6);
+  --shadow-lg: 0 18px 50px rgba(0, 0, 0, 0.7);
+}
+
+@font-face {
+  font-family: "Montserrat";
+  src: url("fonts/montserrat.woff2") format("woff2");
+  font-weight: 100 900;   /* one variable file covers the whole axis */
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Montserrat";
+  src: url("fonts/montserrat-italic.woff2") format("woff2");
+  font-weight: 100 900;
+  font-style: italic;
+  font-display: swap;
 }
 
 *, *::before, *::after { box-sizing: border-box; }
@@ -104,17 +175,19 @@ body {
   font-size: 16px;
   line-height: 1.55;
   color: var(--ink);
-  background: var(--plane);
+  background-color: var(--plane);
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
 }
 
-h1, h2, h3 { line-height: 1.2; letter-spacing: -0.02em; margin: 0 0 0.5em; font-weight: 650; }
-h1 { font-size: clamp(1.85rem, 4.4vw, 3rem); letter-spacing: -0.03em; }
+h1, h2, h3 { line-height: 1.22; letter-spacing: -0.005em; margin: 0 0 0.5em; font-weight: 700; }
+h1 { font-size: clamp(1.8rem, 4.2vw, 2.85rem); letter-spacing: -0.015em; }
 h2 { font-size: clamp(1.3rem, 2.4vw, 1.7rem); }
 h3 { font-size: 1rem; }
 p { margin: 0 0 1rem; }
-a { color: var(--brand); text-decoration-color: color-mix(in srgb, var(--brand) 35%, transparent); text-underline-offset: 2px; }
+/* Brand green is a fill colour, not a text colour: it clears only 2:1 on
+   white. Links stay near-black and lean on the underline. */
+a { color: var(--ink); text-decoration-color: color-mix(in srgb, var(--ink) 40%, transparent); text-underline-offset: 2px; }
 a:hover { text-decoration-color: currentColor; }
 code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.9em; background: var(--surface-sunk); padding: 0.1em 0.35em; border-radius: 4px; }
 
@@ -141,15 +214,17 @@ code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0
 .btn {
   display: inline-flex; align-items: center; justify-content: center; gap: 0.45em;
   font: inherit; font-weight: 550; line-height: 1;
-  padding: 0.62em 1.05em; border-radius: var(--radius-sm);
-  border: 1px solid transparent; cursor: pointer; text-decoration: none;
-  white-space: nowrap; transition: background-color 0.15s, border-color 0.15s, transform 0.08s;
+  padding: 0.62em 1.05em; border-radius: var(--radius);
+  border: var(--outline-w) solid var(--outline); cursor: pointer; text-decoration: none;
+  box-shadow: var(--shadow-sm);
+  white-space: nowrap; transition: background-color 0.15s, box-shadow 0.12s, transform 0.12s;
 }
-.btn:active { transform: translateY(1px); }
+/* Pressing pushes the panel into its own shadow. */
+.btn:active { transform: translate(2px, 2px); box-shadow: 0 0 0 var(--outline); }
 .btn-primary { background: var(--brand); color: var(--brand-ink); }
-.btn-primary:hover { background: color-mix(in srgb, var(--brand) 86%, black); }
-.btn-ghost { background: var(--surface); color: var(--ink-2); border-color: var(--rule-strong); }
-.btn-ghost:hover { background: var(--surface-sunk); color: var(--ink); }
+.btn-primary:hover { background: var(--brand-hover); }
+.btn-ghost { background: var(--surface); color: var(--ink); }
+.btn-ghost:hover { background: var(--amber); }
 .btn-lg { padding: 0.8em 1.4em; font-size: 1.02rem; }
 .btn-sm { padding: 0.5em 0.85em; font-size: 0.86rem; }
 
@@ -157,9 +232,9 @@ code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0
 
 .masthead {
   position: sticky; top: 0; z-index: 40;
-  background: color-mix(in srgb, var(--surface) 88%, transparent);
+  background: color-mix(in srgb, var(--surface) 92%, transparent);
   backdrop-filter: saturate(1.6) blur(10px);
-  border-bottom: 1px solid var(--rule);
+  border-bottom: var(--outline-w) solid var(--outline);
 }
 .masthead-inner { display: flex; align-items: center; gap: 16px; min-height: 60px; }
 .brand { display: flex; align-items: center; gap: 10px; color: var(--ink); text-decoration: none; margin-right: auto; }
@@ -191,7 +266,15 @@ code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0
 
 /* -------------------------------- hero -------------------------------- */
 
-.hero { background: var(--surface); border-bottom: 1px solid var(--rule); }
+/* The site's signature block: a lilac panel under the cross-hatch. */
+.hero {
+  background-color: var(--lilac);
+  background-image: var(--hatch);
+  background-size: var(--hatch-size);
+  border-bottom: var(--outline-w) solid var(--outline);
+}
+.hero .lede, .hero .lede-muted { color: color-mix(in srgb, var(--ink) 78%, transparent); }
+.hero .lede strong { color: var(--ink); }
 .hero-inner { padding-block: clamp(40px, 7vw, 76px) clamp(32px, 5vw, 52px); max-width: 820px; }
 .lede { font-size: clamp(1rem, 1.6vw, 1.12rem); color: var(--ink-2); max-width: 68ch; }
 .lede-muted { color: var(--ink-muted); font-size: 1rem; }
@@ -201,10 +284,22 @@ code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0
 
 .stats-section { padding-block: clamp(28px, 4vw, 40px) 8px; }
 .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(186px, 1fr)); gap: 14px; }
+/* Outlined panels, each capped with one of the brand's accent fills. The
+   accent is a band rather than the tile's background so the status colours
+   inside keep a white field to sit on. */
 .stat {
-  background: var(--surface); border: 1px solid var(--rule); border-radius: var(--radius);
-  padding: 18px 18px 16px; box-shadow: var(--shadow-sm);
+  background: var(--surface); border: var(--outline-w) solid var(--outline);
+  border-radius: var(--radius); box-shadow: var(--shadow-sm);
+  padding: 18px 18px 16px; position: relative; overflow: hidden;
 }
+.stat::before {
+  content: ""; position: absolute; inset: 0 0 auto; height: 8px;
+  background: var(--amber); border-bottom: 1px solid var(--outline);
+}
+.stat:nth-child(2)::before { background: var(--coral); }
+.stat:nth-child(3)::before { background: var(--cyan); }
+.stat:nth-child(4)::before { background: var(--lilac); }
+.stat-label { margin-top: 4px; }
 .stat-label { font-size: 0.78rem; font-weight: 550; color: var(--ink-muted); text-transform: uppercase; letter-spacing: 0.05em; }
 /* Hero figures stay in the system sans, tabular so they don't jitter on filter. */
 .stat-value {
@@ -215,16 +310,17 @@ code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0
 .stat-value.is-open { color: var(--status-open); }
 /* Canopy cover is reference data from a separate City source, not a count drawn
    from these reports, so the tile is tinted to say so. */
-.stat-canopy { border-top-color: var(--brand); background: var(--brand-wash); }
+.stat-canopy { background: var(--brand-wash); }
+.stat-canopy::before { background: var(--brand); }
 .stats-scope { font-size: 0.85rem; color: var(--ink-muted); margin: 12px 0 0; }
 
 /* ------------------------------- filters ------------------------------ */
 
 .filters-section {
   position: sticky; top: 60px; z-index: 30;
-  background: color-mix(in srgb, var(--plane) 92%, transparent);
+  background: color-mix(in srgb, var(--plane) 94%, transparent);
   backdrop-filter: blur(8px);
-  border-block: 1px solid var(--rule);
+  border-block: var(--outline-w) solid var(--outline);
   padding-block: 14px;
   margin-top: 24px;
 }
@@ -242,7 +338,7 @@ code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0
 .field label { font-size: 0.73rem; font-weight: 600; color: var(--ink-muted); text-transform: uppercase; letter-spacing: 0.04em; }
 .field input, .field select {
   font: inherit; font-size: 0.9rem; color: var(--ink); background: var(--surface);
-  border: 1px solid var(--rule-strong); border-radius: var(--radius-sm);
+  border: var(--outline-w) solid var(--outline); border-radius: var(--radius-sm);
   padding: 0.5em 0.65em; min-height: 38px; max-width: 100%;
 }
 .field select { cursor: pointer; }
@@ -253,13 +349,14 @@ code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0
 }
 .check { display: inline-flex; align-items: center; gap: 8px; font-size: 0.88rem; color: var(--ink-2); cursor: pointer; }
 .check input { width: 16px; height: 16px; accent-color: var(--brand); cursor: pointer; }
+.check { color: var(--ink); }
 
-.view-switch { display: inline-flex; background: var(--surface-sunk); border: 1px solid var(--rule); border-radius: var(--radius-sm); padding: 2px; margin-left: auto; }
+.view-switch { display: inline-flex; background: var(--surface-sunk); border: var(--outline-w) solid var(--outline); border-radius: var(--radius-sm); padding: 2px; margin-left: auto; }
 .view-switch button {
   font: inherit; font-size: 0.86rem; font-weight: 550; color: var(--ink-2);
   background: transparent; border: 0; cursor: pointer; padding: 0.42em 0.85em; border-radius: 4px;
 }
-.view-switch button[aria-selected="true"] { background: var(--surface); color: var(--ink); box-shadow: var(--shadow-sm); }
+.view-switch button[aria-selected="true"] { background: var(--amber); color: var(--ink); font-weight: 700; }
 
 /* ------------------------------- results ------------------------------ */
 
@@ -274,15 +371,15 @@ code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0
   gap: 18px;
 }
 .card {
-  background: var(--surface); border: 1px solid var(--rule); border-radius: var(--radius);
+  background: var(--surface); border: var(--outline-w) solid var(--outline); border-radius: var(--radius);
   overflow: hidden; display: flex; flex-direction: column;
   box-shadow: var(--shadow-sm);
-  transition: box-shadow 0.18s, border-color 0.18s, transform 0.18s;
+  transition: box-shadow 0.18s, transform 0.18s;
   /* Keeps long galleries cheap to scroll: offscreen cards skip layout/paint. */
   content-visibility: auto;
   contain-intrinsic-size: auto 330px;
 }
-.card:hover { box-shadow: var(--shadow-md); border-color: var(--rule-strong); transform: translateY(-2px); }
+.card:hover { box-shadow: var(--shadow-md); transform: translate(-2px, -2px); }
 
 /* A fixed ratio frame means the grid never reflows as photographs arrive. */
 .card-figure {
@@ -320,8 +417,8 @@ code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0
 /* Status never relies on colour alone: every chip carries a glyph and a label. */
 .chip {
   display: inline-flex; align-items: center; gap: 5px;
-  font-size: 0.76rem; font-weight: 550; padding: 0.26em 0.6em; border-radius: 100px;
-  border: 1px solid var(--ring); background: var(--surface-sunk); color: var(--ink-2);
+  font-size: 0.76rem; font-weight: 600; padding: 0.26em 0.6em; border-radius: 100px;
+  border: 1.5px solid var(--ring); background: var(--surface-sunk); color: var(--ink-2);
 }
 .chip-open { color: var(--status-open); border-color: color-mix(in srgb, var(--status-open) 35%, transparent); background: color-mix(in srgb, var(--status-open) 8%, transparent); }
 .chip-good { color: var(--status-good); border-color: color-mix(in srgb, var(--status-good) 35%, transparent); background: color-mix(in srgb, var(--status-good) 8%, transparent); }
@@ -337,7 +434,7 @@ code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0
 
 /* --------------------------------- map -------------------------------- */
 
-.map { height: min(68vh, 620px); border: 1px solid var(--rule); border-radius: var(--radius); background: var(--surface-sunk); }
+.map { height: min(68vh, 620px); border: var(--outline-w) solid var(--outline); border-radius: var(--radius); background: var(--surface-sunk); box-shadow: var(--shadow-sm); }
 .map-note { font-size: 0.82rem; color: var(--ink-muted); margin-top: 10px; }
 .dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; vertical-align: baseline; }
 .dot-open { background: var(--status-open); }
@@ -347,10 +444,10 @@ code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0
 
 /* -------------------------------- table ------------------------------- */
 
-.table-scroll { overflow-x: auto; border: 1px solid var(--rule); border-radius: var(--radius); background: var(--surface); }
+.table-scroll { overflow-x: auto; border: var(--outline-w) solid var(--outline); border-radius: var(--radius); background: var(--surface); box-shadow: var(--shadow-sm); }
 .data-table { width: 100%; border-collapse: collapse; font-size: 0.88rem; }
 .data-table th, .data-table td { text-align: left; padding: 9px 12px; border-bottom: 1px solid var(--rule); white-space: nowrap; }
-.data-table th { font-size: 0.74rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--ink-muted); background: var(--surface-sunk); position: sticky; top: 0; }
+.data-table th { font-size: 0.74rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--ink); font-weight: 700; background: var(--amber); border-bottom: var(--outline-w) solid var(--outline); position: sticky; top: 0; }
 .data-table tbody tr:hover { background: var(--surface-sunk); }
 .data-table td:first-child { white-space: normal; min-width: 200px; }
 .data-table .num { font-variant-numeric: tabular-nums; }
@@ -365,7 +462,7 @@ code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0
   align-items: center; gap: 14px; padding: 5px 0;
 }
 .bar-label { font-size: 0.88rem; color: var(--ink-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.bar-track { background: var(--surface-sunk); border-radius: 4px; height: 20px; overflow: hidden; }
+.bar-track { background: var(--surface-sunk); border: 1px solid var(--outline); border-radius: 4px; height: 20px; overflow: hidden; }
 /* Thin mark, rounded data-end, anchored to the baseline at left. */
 .bar-fill { height: 100%; background: var(--series-1); border-radius: 0 4px 4px 0; min-width: 2px; transition: width 0.3s ease; }
 .bar-value { font-size: 0.85rem; color: var(--ink); font-variant-numeric: tabular-nums; min-width: 84px; text-align: right; }
@@ -377,14 +474,14 @@ code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0
 
 /* -------------------------------- method ------------------------------- */
 
-.method-section { padding-block: clamp(30px, 4vw, 48px); border-top: 1px solid var(--rule); scroll-margin-top: 285px; }
+.method-section { padding-block: clamp(30px, 4vw, 48px); border-top: var(--outline-w) solid var(--outline); scroll-margin-top: 285px; }
 .method-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 10px 34px; margin-top: 8px; }
 .method-grid p { font-size: 0.92rem; color: var(--ink-2); }
 .updated { font-size: 0.82rem; color: var(--ink-muted); margin-top: 18px; }
 
 /* -------------------------------- footer ------------------------------- */
 
-.footer { border-top: 1px solid var(--rule); background: var(--surface); margin-top: 20px; }
+.footer { border-top: var(--outline-w) solid var(--outline); background: var(--surface); margin-top: 20px; }
 .footer-inner { padding-block: 28px 34px; display: flex; flex-wrap: wrap; gap: 10px 30px; align-items: baseline; justify-content: space-between; }
 .footer p { font-size: 0.86rem; color: var(--ink-muted); margin: 0; max-width: 62ch; }
 .footer-links { display: flex; gap: 16px; flex-wrap: wrap; }

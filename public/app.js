@@ -34,6 +34,7 @@ const state = {
   boundaryLayers: null,
   matching: [],
   meta: { districts: [], neighborhoods: [] },
+  canopy: null,
   filtered: [],
   shown: 0,
   view: "grid",
@@ -230,9 +231,25 @@ function renderStats() {
     },
   ];
 
+  // Canopy cover is reference data rather than a count from these reports, so it
+  // only appears when a single neighborhood is in view, where it is the context
+  // that makes the counts mean something.
+  const hood = controls.neighborhood.value;
+  const canopy = state.canopy?.neighborhoods?.[hood];
+  if (hood && hood !== "__none__" && canopy !== undefined) {
+    const citywide = state.canopy.citywide;
+    tiles.push({
+      label: "Tree canopy cover",
+      value: `${canopy}%`,
+      note: `${escapeHtml(hood)} in ${state.canopy.year}, against ${citywide}% citywide`,
+      open: canopy < citywide / 2,
+      canopy: true,
+    });
+  }
+
   el("stats").innerHTML = tiles
     .map(
-      (t) => `<div class="stat">
+      (t) => `<div class="stat${t.canopy ? " stat-canopy" : ""}">
         <div class="stat-label">${t.label}</div>
         <div class="stat-value${t.open ? " is-open" : ""}">${t.value}</div>
         <div class="stat-note">${t.note}</div>
@@ -252,9 +269,12 @@ function renderStats() {
   const photoNote = state.photosOnly
     ? " Figures cover every matching report; the gallery below shows only those with a photograph."
     : "";
+  const canopyNote = tiles.some((t) => t.canopy)
+    ? ` Canopy cover: ${state.canopy.source}.`
+    : "";
   el("statsScope").textContent =
     `Showing ${scope.length ? scope.join(" · ") : "all of San Francisco"}` +
-    `${controls.since.value ? `, reported in the ${sinceLabel}` : ", all dates"}.${photoNote}`;
+    `${controls.since.value ? `, reported in the ${sinceLabel}` : ", all dates"}.${photoNote}${canopyNote}`;
 }
 
 /* -------------------------------- breakdown ------------------------------- */
@@ -750,9 +770,10 @@ function restoreTheme() {
 }
 
 async function loadData() {
-  const [casesRes, metaRes] = await Promise.all([
+  const [casesRes, metaRes, canopyRes] = await Promise.all([
     fetch(url("api/cases")).catch(() => null),
     fetch(url("data/meta.json")).catch(() => null),
+    fetch(url("data/canopy.json")).catch(() => null),
   ]);
 
   let payload = casesRes?.ok ? await casesRes.json() : null;
@@ -765,6 +786,7 @@ async function loadData() {
   state.cases = payload.cases || [];
 
   if (metaRes?.ok) state.meta = await metaRes.json();
+  if (canopyRes?.ok) state.canopy = await canopyRes.json().catch(() => null);
   if (!state.meta.neighborhoods?.length) {
     state.meta.neighborhoods = [...new Set(state.cases.map((c) => c.n).filter(Boolean))].sort();
   }

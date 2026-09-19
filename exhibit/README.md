@@ -8,6 +8,7 @@ supervisor district, from the same San Francisco 311 data as the tracker.
 2  Findings    the mass closure, repeat reports, how closed cases were closed
 3  Comparison  all eleven districts, a locator map, neighbourhoods
 4-6 Blocks     photographs grouped by street, in street-number order
+7  Sites       the "no room for trees" rebuttal, with context photographs
 ```
 
 There is no method page. Source, date range, dataset, authorship and how to
@@ -50,6 +51,13 @@ on request.
 re-characterised on the cover — still open, median wait. Anything needing a
 paragraph of qualification belongs in the body, stated narrowly, with the
 qualification attached.
+
+**Answer the stock objections with the City's own records.** "There is no room"
+and "the streets are too narrow" are answered by the fact that half the reported
+empty basins sit on the district's widest thoroughfares. That is computed, not
+asserted. The context photographs on that page are the submitter's own rather
+than 311 attachments, so their captions carry a location and no case number;
+never caption them in a way that implies they came from a service request.
 
 **Give the numbers scale.** A count on its own tells a supervisor nothing: 151
 open and a 194-day median only mean something beside the other ten districts.

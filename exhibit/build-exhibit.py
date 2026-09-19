@@ -31,6 +31,12 @@ n_plant = sum(1 for c in win if c["r"] in ("Tree planted", "Queued for planting"
 odays = sorted((TODAY - datetime.date.fromisoformat(c["o"])).days for c in op)
 median_open, longest_open = odays[len(odays) // 2], max(odays)
 hoods = collections.Counter(c["n"] or "Not recorded" for c in win).most_common()
+MAIN_STREETS = ["6th", "7th", "8th", "9th", "10th", "11th", "12th",
+                "Mission", "Howard", "Market", "Folsom", "Harrison"]
+_main_re = re.compile(r"\b(" + "|".join(MAIN_STREETS) + r")\s+(st|ave|blvd)\b", re.I)
+on_main = [c for c in win if _main_re.search(c["a"])]
+on_main_open = [c for c in on_main if c["s"]]
+
 MAP_SVG = district_map([c for c in win if c["s"]],
                        "/home/user/fairtrees/public/data/boundaries.json", labels=3)
 
@@ -127,6 +133,17 @@ td.n, th.n { text-align: right; white-space: nowrap; }
 .cap .o { color: #9c2b28; }
 .foot { font-size: 8pt; color: #666; border-top: 0.5pt solid #ccc; padding-top: 5pt; margin-top: 13pt; }
 .lede { font-size: 10pt; }
+/* Context photographs: shown whole rather than cropped, since the width of the
+   pavement is the point being made. */
+.sites-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10pt 15pt; margin-top: 11pt; }
+.sites-grid figure { margin: 0; }
+.sites-grid img { width: 100%; height: 2.12in; object-fit: contain;
+                  background: #fff; display: block; }
+.sites-grid figure > img { border-bottom: 0.5pt solid #ddd; padding-bottom: 3pt; }
+.sites-grid figcaption { font-size: 7.6pt; line-height: 1.35; margin-top: 4pt; color: #444;
+                         font-family: Helvetica, Arial, sans-serif; }
+.sites-grid figcaption b { display: block; color: #111; }
+
 /* display findings, matching the weight of the cover figures */
 .display { border-top: 0.75pt solid #bbb; border-bottom: 0.75pt solid #bbb;
            padding: 11pt 0; margin: 14pt 0; }
@@ -354,10 +371,45 @@ page_mix = photo_page(
     mix,
     "Addresses run in street-number order, not date order.")
 
+
+sites = f"""
+<div class="page">
+  <h2>The sites already exist</h2>
+
+  <p>District 6 is often told it has too few places to put a tree, or that its streets are too
+  narrow. The City&rsquo;s own reports say otherwise: <strong>{fmt(len(on_main))} of the
+  {fmt(n_win)} empty basins reported here &mdash; half of them &mdash; are on the district&rsquo;s
+  widest thoroughfares</strong>: 6th, 7th, 8th, 9th, 10th, 11th and 12th Streets, and Mission,
+  Howard, Market, Folsom and Harrison. <strong>{fmt(len(on_main_open))}</strong> of those are still
+  open. These are basins that already exist, already cut, already empty.</p>
+
+  <p>Beyond them are long stretches of wide sidewalk carrying no basins at all, and sites the
+  City has itself marked and then left unplanted.</p>
+
+  <div class="sites-grid">
+    <figure><img src="sites/site2.jpg" alt="">
+      <figcaption><b>9th Street at Brannan Street</b>An entire block frontage, and a sidewalk wide
+      enough throughout, carrying no street tree and no basin.</figcaption></figure>
+    <figure><img src="sites/site3.jpg" alt="">
+      <figcaption><b>The same block, at pavement level</b>The sidewalk runs the length of the
+      building at full width. There is no basin anywhere along it.</figcaption></figure>
+    <figure><img src="sites/site4.jpg" alt="">
+      <figcaption><b>Beneath the freeway viaduct</b>A wide sidewalk carrying a bicycle share
+      station and a striped bicycle lane, and no trees on either side of the street.</figcaption></figure>
+    <figure><img src="sites/site5.jpg" alt="">
+      <figcaption><b>A site marked and left</b>Survey marks laying out a basin on the pavement. The
+      concrete inside them is uncut and there is no tree.</figcaption></figure>
+  </div>
+
+  <div class="foot">The question is not whether District 6 has room for trees. The City has already
+  cut the basins, and in places already marked where the next ones should go.</div>
+</div>
+"""
+
 doc = (f'<!doctype html><html><head><meta charset="utf-8">'
        f'<title>{fmt(len(op))} Empty Tree Basins, Still Waiting — Supervisor District 6</title>'
        f'<style>{CSS}</style></head><body>'
-       + cover + findings + comparison + page_langton + page_again + page_mix
+       + cover + findings + comparison + page_langton + page_again + page_mix + sites
        + '</body></html>')
 open(f"{SCR}/exhibit_v2.html", "w").write(doc)
 

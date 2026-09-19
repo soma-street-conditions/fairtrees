@@ -213,6 +213,9 @@ code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0
 }
 .stat-note { font-size: 0.82rem; color: var(--ink-2); margin-top: 4px; }
 .stat-value.is-open { color: var(--status-open); }
+/* Canopy cover is reference data from a separate City source, not a count drawn
+   from these reports, so the tile is tinted to say so. */
+.stat-canopy { border-top-color: var(--brand); background: var(--brand-wash); }
 .stats-scope { font-size: 0.85rem; color: var(--ink-muted); margin: 12px 0 0; }
 
 /* ------------------------------- filters ------------------------------ */

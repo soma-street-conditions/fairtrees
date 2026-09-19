@@ -1,0 +1,362 @@
+[
+ {
+  "status": "Planted",
+  "addr": "1475 Mission St",
+  "prop": "1475 Mission St",
+  "lat": 37.77448033,
+  "lon": -122.4168035,
+  "basin": "Existing Basin (stumUnknown"
+ },
+ {
+  "status": "Planted",
+  "addr": "1555 Mission St",
+  "prop": "1555 Mission St",
+  "lat": 37.77335964,
+  "lon": -122.4180941,
+  "basin": "New Basin"
+ },
+ {
+  "status": "Planted",
+  "addr": "2 Lafayette St",
+  "prop": "1551 Mission St",
+  "lat": 37.77339463,
+  "lon": -122.4179661,
+  "basin": "New Basin"
+ },
+ {
+  "status": "Planted",
+  "addr": "2 Lafayette St",
+  "prop": "1551 Mission St",
+  "lat": 37.77336441,
+  "lon": -122.4179117,
+  "basin": "New Basin"
+ },
+ {
+  "status": "Planted",
+  "addr": "2 Lafayette St",
+  "prop": "1551 Mission St",
+  "lat": 37.77332996,
+  "lon": -122.4178548,
+  "basin": "New Basin"
+ },
+ {
+  "status": "Planted",
+  "addr": "64 Lafayette St",
+  "prop": "64 Lafayette St",
+  "lat": 37.77287116,
+  "lon": -122.4170902,
+  "basin": "New Basin"
+ },
+ {
+  "status": "Planted",
+  "addr": "100 Kissling St",
+  "prop": "230 11th St",
+  "lat": 37.77253756,
+  "lon": -122.4151901,
+  "basin": "Existing Basin (emp Unknown"
+ },
+ {
+  "status": "Planted",
+  "addr": "124 Kissling St",
+  "prop": "124 Kissling St",
+  "lat": 37.7723253,
+  "lon": -122.4154467,
+  "basin": "New Basin"
+ },
+ {
+  "status": "Planted",
+  "addr": "270 11th St",
+  "prop": "270 11th St",
+  "lat": 37.77230742,
+  "lon": -122.4147514,
+  "basin": "New Basin"
+ },
+ {
+  "status": "Planted",
+  "addr": "270 11th St",
+  "prop": "270 11th St",
+  "lat": 37.77227991,
+  "lon": -122.4147145,
+  "basin": "New Basin"
+ },
+ {
+  "status": "Planted",
+  "addr": "299 11th St",
+  "prop": "1480 Folsom St",
+  "lat": 37.7722285,
+  "lon": -122.4143438,
+  "basin": "Existing Basin (replaVandalism"
+ },
+ {
+  "status": "Planted",
+  "addr": "355 11th St",
+  "prop": "355 11th St",
+  "lat": 37.77133784,
+  "lon": -122.4132285,
+  "basin": "Existing Basin (emp Unknown"
+ },
+ {
+  "status": "Planted",
+  "addr": "333 11th St",
+  "prop": "333 11th St",
+  "lat": 37.77138395,
+  "lon": -122.4132828,
+  "basin": "Existing Basin (emp Unknown"
+ },
+ {
+  "status": "Planted",
+  "addr": "1583 Howard St",
+  "prop": "1583 Howard St",
+  "lat": 37.77201676,
+  "lon": -122.4165992,
+  "basin": "New Basin"
+ },
+ {
+  "status": "Planted",
+  "addr": "1583 Howard St",
+  "prop": "1583 Howard St",
+  "lat": 37.77212542,
+  "lon": -122.416506,
+  "basin": "New Basin"
+ },
+ {
+  "status": "Planted",
+  "addr": "101 12th St",
+  "prop": "99 S Van Ness",
+  "lat": 37.77222196,
+  "lon": -122.417852,
+  "basin": "New Basin"
+ },
+ {
+  "status": "Planted",
+  "addr": "101 S Van Ness Ave",
+  "prop": "101 S Van Ness Ave",
+  "lat": 37.77179132,
+  "lon": -122.418073,
+  "basin": "New Basin"
+ },
+ {
+  "status": "Planted",
+  "addr": "101 S Van Ness Ave",
+  "prop": "101 S Van Ness Ave",
+  "lat": 37.77186976,
+  "lon": -122.4180965,
+  "basin": "New Basin"
+ },
+ {
+  "status": "Planted",
+  "addr": "101 S Van Ness Ave",
+  "prop": "101 S Van Ness Ave",
+  "lat": 37.77190845,
+  "lon": -122.4181058,
+  "basin": "New Basin"
+ },
+ {
+  "status": "Planted",
+  "addr": "231 12th St",
+  "prop": "231 12th St",
+  "lat": 37.77153416,
+  "lon": -122.4162628,
+  "basin": "New Basin"
+ },
+ {
+  "status": "Planted",
+  "addr": "231 12th St",
+  "prop": "231 12th St",
+  "lat": 37.77156543,
+  "lon": -122.4163345,
+  "basin": "New Basin"
+ },
+ {
+  "status": "Planted",
+  "addr": "302 12th St",
+  "prop": "1601 Folsom St",
+  "lat": 37.77076364,
+  "lon": -122.4148706,
+  "basin": "New Basin"
+ },
+ {
+  "status": "Planted",
+  "addr": "302 12th St",
+  "prop": "1601 Folsom St",
+  "lat": 37.77072229,
+  "lon": -122.4147734,
+  "basin": "New Basin"
+ },
+ {
+  "status": "Planted",
+  "addr": "1515 Folsom St",
+  "prop": "1515 Folsom St",
+  "lat": 37.77158436,
+  "lon": -122.4142763,
+  "basin": "New Basin"
+ },
+ {
+  "status": "Planted",
+  "addr": "1455 Folsom St",
+  "prop": "1455 Folsom St",
+  "lat": 37.7721033,
+  "lon": -122.4136,
+  "basin": "New Basin"
+ },
+ {
+  "status": "Planted",
+  "addr": "1 Isis St",
+  "prop": null,
+  "lat": 37.77046,
+  "lon": -122.4144009,
+  "basin": "New Basin"
+ },
+ {
+  "status": "Planted",
+  "addr": "14 Isis St",
+  "prop": "14 Isis St",
+  "lat": 37.77039216,
+  "lon": -122.4145524,
+  "basin": "New Basin"
+ },
+ {
+  "status": "Planted",
+  "addr": "39 Isis St",
+  "prop": "39 Isis St",
+  "lat": 37.77002946,
+  "lon": -122.4146254,
+  "basin": "New Basin"
+ },
+ {
+  "status": "Planted",
+  "addr": "99 Isis St",
+  "prop": "60 13th St",
+  "lat": 37.76992875,
+  "lon": -122.4146636,
+  "basin": "New Basin"
+ },
+ {
+  "status": "Planted",
+  "addr": "99 Isis St",
+  "prop": "60 13th St",
+  "lat": 37.76981055,
+  "lon": -122.4147085,
+  "basin": "New Basin"
+ },
+ {
+  "status": "Planted",
+  "addr": "50 Bernice St",
+  "prop": "50 13th St",
+  "lat": 37.76982231,
+  "lon": -122.4141116,
+  "basin": "New Basin"
+ },
+ {
+  "status": "Planted",
+  "addr": "30 Bernice St",
+  "prop": "30 Bernice St",
+  "lat": 37.76986154,
+  "lon": -122.4140841,
+  "basin": "New Basin"
+ },
+ {
+  "status": "Planted",
+  "addr": "1 Bernice St",
+  "prop": null,
+  "lat": 37.77015482,
+  "lon": -122.4138377,
+  "basin": "New Basin"
+ },
+ {
+  "status": "Planted",
+  "addr": "21 Bernice St",
+  "prop": "21 Bernice St",
+  "lat": 37.77002904,
+  "lon": -122.4139058,
+  "basin": "New Basin"
+ },
+ {
+  "status": "Planted",
+  "addr": "46 Norfolk St",
+  "prop": "333 12th St",
+  "lat": 37.771016,
+  "lon": -122.413897,
+  "basin": "Existing Basin (replaShockout/Lack o"
+ },
+ {
+  "status": "Planted",
+  "addr": "46 Norfolk St",
+  "prop": "333 12th St",
+  "lat": 37.770939,
+  "lon": -122.413768,
+  "basin": "Existing Basin (replaShockout/Lack o"
+ },
+ {
+  "status": "Planted",
+  "addr": "46 Norfolk St",
+  "prop": "333 12th St",
+  "lat": 37.770857,
+  "lon": -122.413622,
+  "basin": "Existing Basin (replaShockout/Lack o"
+ },
+ {
+  "status": "Planted",
+  "addr": "46 Norfolk St",
+  "prop": "333 12th St",
+  "lat": 37.770823,
+  "lon": -122.413561,
+  "basin": "Existing Basin (replaShockout/Lack o"
+ },
+ {
+  "status": "Planted",
+  "addr": "98 Norfolk St",
+  "prop": "333 12th St",
+  "lat": 37.77062592,
+  "lon": -122.41322,
+  "basin": "Existing Basin (emp Unknown"
+ },
+ {
+  "status": "Planted",
+  "addr": "98 Norfolk St",
+  "prop": "333 12th St",
+  "lat": 37.77054906,
+  "lon": -122.4130724,
+  "basin": "Existing Basin (emp Unknown"
+ },
+ {
+  "status": "Planted",
+  "addr": "300 8th St",
+  "prop": "1201 Folsom St",
+  "lat": 37.774723,
+  "lon": -122.409917,
+  "basin": "Existing Basin (replaVandalism"
+ },
+ {
+  "status": "Planted",
+  "addr": "1174 Bryant St",
+  "prop": "1174 Bryant St",
+  "lat": 37.77062596,
+  "lon": -122.4095933,
+  "basin": "Existing Basin (emp Unknown"
+ },
+ {
+  "status": "Planted",
+  "addr": "447 10th St",
+  "prop": "447 10th St",
+  "lat": 37.77114291,
+  "lon": -122.4105914,
+  "basin": "New Basin"
+ },
+ {
+  "status": "Planted",
+  "addr": "56 Ringold St",
+  "prop": "56 Ringold St",
+  "lat": 37.77387711,
+  "lon": -122.4104726,
+  "basin": "Existing Basin (emp Unknown"
+ },
+ {
+  "status": "Planted",
+  "addr": "695 Minna St",
+  "prop": null,
+  "lat": 37.777164,
+  "lon": -122.412383,
+  "basin": "Existing Basin (replaVandalism"
+ }
+]

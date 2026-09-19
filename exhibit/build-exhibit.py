@@ -15,11 +15,22 @@ CUT = (TODAY - datetime.timedelta(days=730)).isoformat()
 
 cases = json.load(open("/home/user/fairtrees/public/data/snapshot.json"))["cases"]
 d6 = [c for c in cases if c["d"] == "6"]
-# 1532 Harrison St was photographed as an empty basin and its 311 cases are
-# still open, but trees have since been planted there. It is withheld from every
-# photograph page: an open case is not proof of an empty basin, and one frame a
-# reader can disprove on foot would be used against the whole document.
-WITHHELD = {"1532 harrison st"}
+# Addresses that were photographed as empty basins but have since been planted.
+# A frame a reader can disprove on foot would be used against the whole document,
+# so these never reach a page no matter what the 311 record still says.
+#
+#   1532 Harrison St   trees planted; its 311 cases are nonetheless still open.
+#   1174 Bryant St     planted by Friends of the Urban Forest, 18 April 2026
+#   333 11th St        "
+#   355 11th St        "
+#
+# The Friends of the Urban Forest entries come from the SOMA West CBD watering
+# list dated 22 April 2026 (45 trees, all planted 18 April 2026). Cross-matched
+# on exact street address; the four City cases at those addresses were all
+# closed on 5 December 2025 as "Cancelled - Planned Maintenance", four months
+# before a tree went in, and none of them was open. Nothing else on that list
+# lands within a parcel of a report in this document.
+WITHHELD = {"1532 harrison st", "1174 bryant st", "333 11th st", "355 11th st"}
 
 def has(c):
     if re.sub(r"\s+", " ", c["a"].strip().lower()) in WITHHELD:

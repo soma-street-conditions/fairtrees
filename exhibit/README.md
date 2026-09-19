@@ -128,6 +128,13 @@ This is the document's one real vulnerability, and it has already bitten once.
 open, and trees have since been planted there. The address sits in `WITHHELD` in
 `build-exhibit.py` and is kept off every photograph page.
 
+Cross-check every planting list you can get against `WITHHELD` before filing.
+Friends of the Urban Forest's SOMA West CBD list (45 trees, planted 18 April
+2026, kept here as `fuf-soma-west-2026-04.json`) added three more addresses.
+Match on exact street address, not proximity: a tree 30 metres away is a
+different basin on the same block, and withholding those would weaken the
+document for nothing.
+
 The document's claim is that these cases are "still open," which a reader takes
 to mean the basins are still empty. If a tree was planted while the case stayed
 open, open status does not prove an empty basin, and anyone who finds a second

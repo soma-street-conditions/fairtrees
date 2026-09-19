@@ -15,7 +15,16 @@ CUT = (TODAY - datetime.timedelta(days=730)).isoformat()
 
 cases = json.load(open("/home/user/fairtrees/public/data/snapshot.json"))["cases"]
 d6 = [c for c in cases if c["d"] == "6"]
-has = lambda c: os.path.exists(f"{SCR}/print/{c['id']}.jpg")
+# 1532 Harrison St was photographed as an empty basin and its 311 cases are
+# still open, but trees have since been planted there. It is withheld from every
+# photograph page: an open case is not proof of an empty basin, and one frame a
+# reader can disprove on foot would be used against the whole document.
+WITHHELD = {"1532 harrison st"}
+
+def has(c):
+    if re.sub(r"\s+", " ", c["a"].strip().lower()) in WITHHELD:
+        return False
+    return os.path.exists(f"{SCR}/print/{c['id']}.jpg")
 norm = lambda a: re.sub(r"\s+", " ", a.strip().lower())
 citywide = [c for c in cases if c["o"] and c["o"] >= CUT and c["d"]]
 d6 = [c for c in cases if c["d"] == "6"]
@@ -67,10 +76,16 @@ for addr, cs in by.items():
             reported_again_photo.append(first)
 reported_again_photo.sort(key=lambda c: c["o"])
 
-def block(street_name, limit=None):
+def block(*street_names, limit=None, open_first=False):
+    names = set(street_names)
     sel = [c for c in win if has(c)
-           and re.sub(r"^\d+\s+", "", c["a"]).strip().lower() == street_name]
-    sel.sort(key=lambda c: int(re.match(r"^(\d+)", c["a"]).group(1)) if re.match(r"^(\d+)", c["a"]) else 0)
+           and re.sub(r"^\d+\s+", "", c["a"]).strip().lower() in names]
+    if open_first:
+        # Twelve to a page, so spend them on the basins still waiting.
+        sel = [c for c in sel if c["s"]] + [c for c in sel if not c["s"]]
+        sel = sel[:limit or PER_PAGE]
+    num = lambda c: int(re.match(r"^(\d+)", c["a"]).group(1)) if re.match(r"^(\d+)", c["a"]) else 0
+    sel.sort(key=lambda c: (re.sub(r"^\d+\s+", "", c["a"]).strip().lower(), num(c)))
     return sel[:limit] if limit else sel
 
 langton = block("langton st")
@@ -117,16 +132,14 @@ body { font-family: "Source Sans 3", Helvetica, Arial, sans-serif; font-size: 10
 .page { page-break-after: always; background: var(--paper); }
 .page:last-child { page-break-after: auto; }
 
-h1 { font-size: 34pt; line-height: 1.12; margin: 0 0 10pt; font-weight: 700;
-     letter-spacing: -0.018em; }
+h1 { font-size: 34pt; line-height: 1.12; margin: 0 0 10pt; font-weight: 700; }
 /* No rule under a heading: weight and the space above do that work. */
-h2 { font-size: 18pt; margin: 0 0 11pt; font-weight: 700; color: var(--green);
-     letter-spacing: -0.008em; }
+h2 { font-size: 18pt; margin: 0 0 11pt; font-weight: 700; color: var(--green); }
 h3 { font-size: 11pt; margin: 15pt 0 5pt; font-weight: 700; }
 p { margin: 0 0 10pt; }
 .sub { font-size: 13pt; color: var(--grey); margin-bottom: 3pt; font-weight: 400; }
 .dateline { font-size: 10pt; color: var(--grey); }
-.rule { border-top: 1pt solid var(--hair); margin: 13pt 0 14pt; }
+.rule { border-top: 1pt solid var(--hair); margin: 12pt 0 12pt; }
 .small { font-size: 9pt; }
 .muted { color: var(--grey); }
 
@@ -179,14 +192,14 @@ td.n, th.n { text-align: right; white-space: nowrap; }
 .display .dline { font-size: 17pt; line-height: 1.24; font-weight: 700; color: var(--green); }
 .display .dtxt { font-size: 9.5pt; color: var(--ink); margin-top: 8pt; }
 .src { font-size: 8pt; color: var(--grey); margin-top: 6pt; }
-table.tight { font-size: 8.6pt; }
-table.tight td, table.tight th { padding: 2.6pt 5pt; }
+table.tight { font-size: 8pt; }
+table.tight td, table.tight th { padding: 1.6pt 5pt; }
 tr.me td { font-weight: 700; }
 .twocol { display: flex; gap: 20pt; margin-top: 12pt; align-items: flex-start; }
 .twocol > div { min-width: 0; }
-.twocol > div:first-child { flex: 1.3; }
+.twocol > div:first-child { flex: 1.55; }
 .twocol > div:last-child { flex: 1; }
-.twocol svg { display: block; margin-top: 4pt; height: 2.15in; width: auto; max-width: 100%; }
+.twocol svg { display: block; margin-top: 4pt; height: 2.78in; width: auto; max-width: 100%; }
 
 /* cover: the closure note and the photograph that answers it, side by side */
 .coverflex { display: flex; gap: 18pt; align-items: flex-start; margin-top: 2pt; }
@@ -204,10 +217,11 @@ tr.me td { font-weight: 700; }
 .bhead, .brow { display: grid; grid-template-columns: 58pt 1fr 26pt;
                 align-items: center; gap: 9pt; }
 .bhead { font-size: 8.4pt; color: var(--grey); padding-bottom: 5pt; }
-.brow { font-size: 9.5pt; padding: 3pt 0; }
-.bars { margin: 4pt 0 16pt; max-width: 76%; }
-.btrack { background: transparent; height: 13pt; }
-.bfill { background: var(--hair); height: 100%; }
+.brow { font-size: 9.5pt; padding: 1.1pt 0; }
+.bars { margin: 3pt 0 11pt; max-width: 76%; }
+.btrack { background: transparent; height: 11.5pt; }
+/* #E4E4E4 on #FAFAFA is too close to the paper to read as a bar. */
+.bfill { background: #CFCFCF; height: 100%; }
 .brow.me { font-weight: 700; }
 .brow.me .bfill { background: var(--coral); }
 .bv { text-align: right; }
@@ -273,23 +287,23 @@ dist_table = "".join(dist_row(r) for r in sorted(dist_rows, key=pct_open, revers
 cover = f"""
 <div class="page">
   <h1>{fmt(len(op))} Empty Tree Basins,<br>Still Waiting</h1>
-  <div class="sub">Supervisor District 6 &mdash; photographic and records evidence
-  from San Francisco 311</div>
-  <div class="dateline">Reports filed {pretty(CUT)} &ndash; {pretty(TODAY.isoformat())}</div>
+  <div class="sub">Supervisor District 6 &mdash; photos and case records from San Francisco 311</div>
+  <div class="dateline">Open cases as of {pretty(TODAY.isoformat())}</div>
   <div class="rule"></div>
 
   <div class="coverflex">
     <div>
-      <p>On <strong>{fmt(len(nores))} District 6 service requests</strong> closed between
-      {pretty(nores_from)} and {pretty(nores_to)}, San Francisco Public Works closed the case with
-      this note:</p>
+      <p>San Francisco Public Works closed <strong>{fmt(len(nores))} District 6 cases</strong>
+      with this note:</p>
 
       <div class="quote">
         <p>&ldquo;We have confirmed that this is an empty basin. Unfortunately, we do not currently
         have the resources to plant a new tree at this location, but it is on our list of sites to
         plant once funding is available. If you want to pursue the planting of and can water a new
         tree weekly for three years, please let us know at urbanforestry@sfdpw.org&rdquo;</p>
-        <div class="src">Reproduced verbatim from San Francisco 311, dataset vw6y-z8j6.</div>
+        <div class="src">Reproduced verbatim from the City&rsquo;s 311 records. The
+        {fmt(len(nores))} cases carrying this note were closed between {pretty(nores_from)} and
+        {pretty(nores_to)}.</div>
       </div>
 
       <p>The basin was inspected and confirmed empty. The case was closed without a tree being
@@ -318,6 +332,9 @@ cover = f"""
 
   <p class="claim">The sites already exist. They are already cut, and already empty.</p>
 
+  <p class="small" style="margin-top:9pt">Filling every basin in this document would close under
+  2% of District 6&rsquo;s tree canopy gap.</p>
+
   <p class="small muted" style="margin-top:11pt">Every case in this document carries its 311
   case number and can be verified independently at
   mobile311.sfgov.org/tickets/&lt;case&nbsp;number&gt;. The complete set of
@@ -325,14 +342,15 @@ cover = f"""
   available on request.</p>
 
   <p class="small muted" style="margin-top:13pt">Prepared by {e(SUBMITTER)}, {e(ORG)} &mdash;
-  {pretty(TODAY.isoformat())}. Compiled entirely from the City's own open data; no figure has
-  been estimated or supplied by the author.</p>
+  {pretty(TODAY.isoformat())}. Covers reports filed between {pretty(CUT)} and
+  {pretty(TODAY.isoformat())}. Every figure comes from the City&rsquo;s own open data.</p>
 </div>
 """
 
 # ---------------------------------------------------------------- page 2
+SHORT_HOOD = {"Financial District/South Beach": "FiDi / South Beach"}
 hood_rows = "".join(
-    f'<tr><td>{e(k)}</td><td class="n">{fmt(v)}</td>'
+    f'<tr><td>{e(SHORT_HOOD.get(k, k))}</td><td class="n">{fmt(v)}</td>' 
     f'<td class="n">{fmt(sum(1 for c in win if (c["n"] or "Not recorded")==k and c["s"]))}</td></tr>'
     for k, v in hoods)
 
@@ -344,7 +362,7 @@ stevenson = sorted([c for c in win if norm(c["a"]).startswith("548 stevenson") a
 
 findings = f"""
 <div class="page">
-  <h2>What the record shows</h2>
+  <h2>Three in five reports are still open</h2>
 
   <p>Residents filed <strong>{fmt(n_win)}</strong> reports of empty street-tree basins in
   District 6 between {pretty(CUT)} and {pretty(TODAY.isoformat())}.
@@ -359,7 +377,7 @@ findings = f"""
     &ldquo;Cancelled&nbsp;&mdash;&nbsp;Planned Maintenance.&rdquo;
     <strong>{fmt(len(mass_d6))} were in District 6.</strong> Residents have since filed fresh
     reports at {fmt(len(reported_again))} of those District 6 locations, and every one of those
-    new reports is still open. Twelve are photographed on page 6.</div>
+    new reports is still open. {fmt(len(reported_again_photo))} of them are photographed on page 6.</div>
   </div>
 
   <div class="display">
@@ -369,6 +387,7 @@ findings = f"""
     {pretty(stevenson[-1]["o"], False)} of this year. Each report is a separate 311 case. Not one
     has been closed.</div>
   </div>
+
 
   <div class="twocol">
     <div>
@@ -392,14 +411,15 @@ findings = f"""
   &ldquo;Cancelled &mdash; Planned Maintenance,&rdquo; and <strong>none</strong> record a tree
   having been planted. That figure describes the public record rather than the ground: closure
   notes became markedly less specific after about 2015, and today almost every closed report
-  carries only that one phrase. The fair conclusion is not that nothing was planted, but that
-  <strong>a resident cannot tell from the public record what happened to their report</strong>
-  &mdash; which is why the same basins keep being reported again.</p>
+  carries only that one phrase. Something may well have been planted at some of them. The point
+  is that <strong>a resident cannot tell from the public record what happened to their
+  report</strong>, which is why the same basins keep being reported again.</p>
 </div>
 """
 
+SHORT_HOOD = {"Financial District/South Beach": "FiDi / South Beach"}
 hood_rows = "".join(
-    f'<tr><td>{e(k)}</td><td class="n">{fmt(v)}</td>'
+    f'<tr><td>{e(SHORT_HOOD.get(k, k))}</td><td class="n">{fmt(v)}</td>' 
     f'<td class="n">{fmt(sum(1 for c in win if (c["n"] or "Not recorded")==k and c["s"]))}</td></tr>'
     for k, v in hoods)
 
@@ -407,16 +427,14 @@ comparison = f"""
 <div class="page">
   <h2>District 6 against the rest of the city</h2>
 
-  <p>Empty basins are not evenly distributed, and neither is the wait. District 6 filed
-  <strong>{round(n_win/city_n*100)}%</strong> of the empty-basin reports made in San Francisco over
-  these two years, and holds <strong>{round(len(op)/city_open*100)}% of every one that is still
-  open</strong> &mdash; {fmt(len(op))} of {fmt(city_open)}, more than twice the next district.
-  Nearly three in five District 6 reports are still open; in every one of the other ten
-  districts the figure is below one in three. Its median open case has waited {median_open} days against
-  {int(median_of_medians)} across the eleven districts &mdash; the second-longest median in the
-  city, and the longest of any district with more than a handful of open cases. (District
-  {longest_median[0]}&rsquo;s median is {longest_median[3]} days, on {longest_median[2]} open
-  cases.)</p>
+  <p>District 6 filed <strong>{round(n_win/city_n*100)}%</strong> of San Francisco&rsquo;s
+  empty-basin reports over these two years and holds
+  <strong>{round(len(op)/city_open*100)}% of every one still open</strong> &mdash;
+  {fmt(len(op))} of {fmt(city_open)}, more than twice the next district. Everywhere else the
+  share still open is below one in three. Its median open case has waited {median_open} days
+  against {int(median_of_medians)} citywide: the second-longest, and the longest of any district
+  with more than a handful of open cases. (District {longest_median[0]}&rsquo;s median is
+  {longest_median[3]} days, on {longest_median[2]} open cases.)</p>
 
   <div class="bars">
     <div class="bhead"><div></div><div>Share of this district&rsquo;s reports still open</div>
@@ -451,7 +469,7 @@ page_langton = photo_page(
     "Every photograph was taken and submitted by a resident as part of their own 311 report.")
 
 page_again = photo_page(
-    "Closed as &ldquo;Planned Maintenance,&rdquo; then reported again",
+    "Closed as &ldquo;Planned&nbsp;Maintenance,&rdquo; then reported again",
     f"Each of these basins was among the {fmt(len(mass_d6))} District 6 reports the City closed on "
     f"{pretty(MASS)}. Each was then reported again by a resident &mdash; between 15 and 264 days "
     f"later &mdash; and photographed. <strong>Every one of these newer reports is still open.</strong> "
@@ -469,15 +487,97 @@ page_mix = photo_page(
     f"filled them; the green in those frames is a weed, not a tree. They are followed by basins "
     f"on Howard Street, where every photographed report in this period is also still open.",
     mix,
-    "Addresses run in street-number order, not date order.")
+    "Addresses run in street-number order.")
 
+
+def page_stats(items):
+    op = [c for c in items if c["s"]]
+    dd = sorted(days_open(c) for c in op)
+    return len(items), len(op), (min(dd) if dd else 0), (max(dd) if dd else 0)
+
+# --- 9th Street -----------------------------------------------------------
+ninth = block("9th st", open_first=True)
+n_n, n_o, n_lo, n_hi = page_stats(ninth)
+page_9th = photo_page(
+    "9th Street",
+    f"9th Street is six lanes wide with sidewalks to match, and it carries the barricade and the "
+    f"white basin outline on the cover of this document. Residents photographed empty basins at "
+    f"<strong>{fmt(len(block('9th st')))}</strong> addresses along it in this period. "
+    f"<strong>{fmt(n_o)} of the twelve shown here are still open</strong>, between {n_lo} and "
+    f"{n_hi} days after they were reported.",
+    ninth,
+    "Every photograph was taken by the resident who filed the report.")
+
+# --- Harrison Street ------------------------------------------------------
+harrison = block("harrison st", open_first=True)
+h_n, h_o, h_lo, h_hi = page_stats(harrison)
+page_harrison = photo_page(
+    "Harrison Street",
+    f"Harrison runs the width of the district, four lanes and a bike lane, from the Embarcadero to "
+    f"the Mission. These twelve basins were photographed along it; "
+    f"<strong>{fmt(h_o)} are still open</strong>, the oldest {h_hi} days after it was reported. "
+    f"Five of them were reported on a single day, 23 January 2026.",
+    harrison,
+    "One further Harrison Street site has been withheld: trees were planted there after the "
+    "photograph was taken, although its 311 cases remain open.")
+
+# --- Market Street --------------------------------------------------------
+market = block("market st", open_first=True)
+m_n, m_o, m_lo, m_hi = page_stats(market)
+page_market = photo_page(
+    "Market Street",
+    f"Market Street is the City&rsquo;s principal civic address and the one visitors walk. "
+    f"Residents photographed empty basins at <strong>{fmt(len(block('market st')))}</strong> "
+    f"addresses along the District 6 stretch of it. {fmt(m_o)} of the twelve here are still open, "
+    f"the oldest {m_hi} days on. The remainder were closed without a planting recorded.",
+    market,
+    "Addresses run in street-number order.")
+
+# --- the alleys -----------------------------------------------------------
+alleys = block("minna st", "natoma st", "stevenson st", open_first=True)
+a_n, a_o, a_lo, a_hi = page_stats(alleys)
+page_alleys = photo_page(
+    "The alleys: Minna, Natoma and Stevenson",
+    f"Minna, Natoma and Stevenson run parallel between Mission and Howard and carry as much "
+    f"pedestrian traffic as some of the numbered streets. Residents photographed "
+    f"<strong>{fmt(len(block('minna st', 'natoma st', 'stevenson st')))}</strong> empty basins "
+    f"across the three. <strong>{fmt(a_o)} of the twelve shown are still open</strong>, between "
+    f"{a_lo} and {a_hi} days after they were reported. 548 Stevenson, reported six times in one "
+    f"year, is one of these addresses.",
+    alleys,
+    "Grouped by street, then by street number.")
+
+# --- Folsom and Mission ---------------------------------------------------
+folmis = block("folsom st", "mission st", open_first=True)
+f_n, f_o, f_lo, f_hi = page_stats(folmis)
+page_folmis = photo_page(
+    "Folsom Street and Mission Street",
+    f"Two of the thoroughfares named on page 2. Residents photographed "
+    f"<strong>{fmt(len(block('folsom st', 'mission st')))}</strong> empty basins along them; "
+    f"<strong>{fmt(f_o)} of the twelve here are still open</strong>, the oldest {f_hi} days after "
+    f"it was reported.",
+    folmis,
+    "Folsom Street first, then Mission, each in street-number order.")
+
+# --- the remaining numbered streets --------------------------------------
+numbered = block("7th st", "8th st", "10th st", "11th st", open_first=True)
+u_n, u_o, u_lo, u_hi = page_stats(numbered)
+page_numbered = photo_page(
+    "7th, 8th, 10th and 11th Streets",
+    f"The rest of the numbered thoroughfares named on page 2, each of them four lanes or more. "
+    f"Residents photographed "
+    f"<strong>{fmt(len(block('7th st', '8th st', '10th st', '11th st')))}</strong> empty basins "
+    f"across the four. {fmt(u_o)} of the twelve shown are still open, the oldest {u_hi} days on.",
+    numbered,
+    "Grouped by street, then by street number.")
 
 sites = f"""
 <div class="page">
   <h2>The sites already exist</h2>
 
-  <p>The first thing District 6 is told is that it has too few places to put a tree, or that its
-  streets are too narrow. The City&rsquo;s own reports say otherwise. <strong>{fmt(len(on_main))}
+  <p>Public Works and the Urban Forestry Council tell this district it has too few places to put
+  a tree, and that its streets are too narrow. The City&rsquo;s own reports say otherwise.
+  <strong>{fmt(len(on_main))}
   of the {fmt(n_win)} empty basins reported here &mdash; half of them &mdash; are on the
   district&rsquo;s widest thoroughfares</strong>: 6th, 7th, 8th, 9th, 10th, 11th and 12th Streets,
   and Mission, Howard, Market, Folsom and Harrison. <strong>{fmt(len(on_main_open))}</strong> of
@@ -495,23 +595,26 @@ sites = f"""
     <figure><img src="sites/site3.jpg" alt="">
       <figcaption><b>The same block, at pavement level</b>Full width the length of the building.
       No basin anywhere along it.</figcaption></figure>
-    <figure><img src="sites/site4.jpg" alt="">
-      <figcaption><b>A wide sidewalk beside an elevated roadway</b>Full width the length of the
-      block, past a bicycle lane. No tree or basin on either side.</figcaption></figure>
+    <figure><img src="sites/site5.jpg" alt="">
+      <figcaption><b>Two basins marked out, at dusk</b>Two outlines sprayed in white on a wide
+      sidewalk. The pavement inside them has not been cut.</figcaption></figure>
     <figure><img src="sites/site9.jpg" alt="">
       <figcaption><b>Beneath the freeway viaduct</b>Basins laid out in white along a wide
       sidewalk. Neither side of the street carries a tree.</figcaption></figure>
   </div>
 
-  <div class="foot">The question is not whether District 6 has room for trees. The City has already
-  cut thousands of basins here, and has marked out where the next ones should go.</div>
+  <div class="foot">District 6 has room for trees. Thousands of basins here were cut years ago
+  and now sit empty, and at the sites above the City has sprayed out where the next ones go and
+  left the pavement uncut.</div>
 </div>
 """
 
 doc = (f'<!doctype html><html><head><meta charset="utf-8">'
        f'<title>{fmt(len(op))} Empty Tree Basins, Still Waiting — Supervisor District 6</title>'
        f'<style>{CSS}</style></head><body>'
-       + cover + sites + findings + comparison + page_langton + page_again + page_mix
+       + cover + sites + findings + comparison
+       + page_langton + page_again + page_mix
+       + page_9th + page_harrison + page_market + page_alleys + page_folmis + page_numbered
        + '</body></html>')
 open(f"{SCR}/exhibit_v2.html", "w").write(doc)
 
@@ -521,5 +624,7 @@ print(f"reports={n_win} open={len(op)} ({round(len(op)/n_win*100)}%) closed={len
 print(f"mass closure {MASS}: citywide={len(mass_all)} d6={len(mass_d6)} "
       f"re-reported={len(reported_again)} (photo {len(reported_again_photo)})")
 print(f"548 Stevenson open reports={len(stevenson)}")
-print(f"photo pages: langton={len(langton)} again={len(reported_again_photo)} mix={len(mix)}")
+print(f"photo pages: langton={len(langton)} again={len(reported_again_photo)} mix={len(mix)} "
+      f"9th={len(ninth)} harrison={len(harrison)} market={len(market)} alleys={len(alleys)} "
+      f"folsom+mission={len(folmis)} numbered={len(numbered)}")
 print(f"quoted cases={len(nores)} ({nores_from}..{nores_to})")

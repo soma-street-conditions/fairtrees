@@ -1,14 +1,16 @@
 # Hearing exhibit generator
 
-Builds a six-page printable PDF of empty street-tree basin reports for one
+Builds a seven-page printable PDF of empty street-tree basin reports for one
 supervisor district, from the same San Francisco 311 data as the tracker.
 
 ```
-1  Cover       the City's own closure note, then two headline figures
-2  Findings    the mass closure, repeat reports, how closed cases were closed
-3  Comparison  all eleven districts, a locator map, neighbourhoods
-4-6 Blocks     photographs grouped by street, in street-number order
-7  Sites       the "no room for trees" rebuttal, with context photographs
+1   Cover       the City's own closure note, a marked-but-uncut basin beside
+                it, and three headline figures
+2   Sites       the "no room for trees" rebuttal, with context photographs
+3   Findings    the mass closure, repeat reports, how closed cases were closed
+4   Comparison  all eleven districts as a sorted chart, a locator map,
+                neighbourhoods
+5-7 Blocks      photographs grouped by street, in street-number order
 ```
 
 There is no method page. Source, date range, dataset, authorship and how to
@@ -46,6 +48,25 @@ by how many are still open.
 auto-generated. The completeness objection is answered in one sentence in the
 method section: the full photographic set is published on the site and available
 on request.
+
+**Put a photograph on page 1, and the rebuttal on page 2.** Attention is highest
+on the first page and falls off fast, so neither should be spent on prose. The
+photograph makes the document identifiable in two seconds; the rebuttal answers
+"the streets are too narrow" while the reader is still forming the objection
+rather than after they have settled it. Both were originally later in the
+document, and both were wasted there.
+
+**One of the three cover figures has to be relative.** Absolute counts tell a
+supervisor who does not know the district nothing. The share of the city's open
+backlog sitting in this one district, set against the share of reports it filed,
+is the only figure on the cover that can be acted on without further reading.
+
+**Show the district comparison as a sorted chart, and leave the supervisors'
+names out.** A table makes a reader search for the finding; a chart sorted by
+share-still-open hands it to them, and the counts and medians survive as labels,
+so nothing is lost. Names invite each member to look up their own row instead of
+reading the distribution, and hand a chair with a backlog of their own a way to
+make the hearing about that instead.
 
 **Keep the headline figures unattackable.** Put counts that cannot be
 re-characterised on the cover — still open, median wait. Anything needing a
@@ -93,3 +114,11 @@ hearing.
 
 Do not put an uncited statistic in a filing. If a canopy percentage or similar is
 wanted, carry its source with it.
+
+Two traps this document has already fallen into, worth re-checking each build.
+The district median is the *second*-longest in the city; the longest belongs to a
+district with eight open cases. State that outright rather than caveating it, or
+someone repeats "District 6 has the longest waits" from the dais and is wrong.
+And look at every photograph at the size it will print: two China Basin basins
+are so long-neglected that wild fennel has filled them, and at thumbnail size
+they read as planted trees unless the caption says otherwise.

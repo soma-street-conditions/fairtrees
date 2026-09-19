@@ -200,6 +200,21 @@ pavement. Spray paint is not a cut basin.
 the caption box and stop mid-word ("cancelled — planned ma"). `SHORT_OUTCOME`
 maps them; add to it rather than slicing.
 
+**Every case number is a live link, so check they resolve.** The exhibit is
+filed as a PDF that others open and click, and Chromium turns each absolute
+`href` into a real PDF link annotation. `https://mobile311.sfgov.org/tickets/<id>`
+returns 200 for a valid case and 404 for an invalid one, so the whole set can be
+checked in one pass before filing:
+
+```bash
+python3 -c "import re;print('\n'.join(sorted(set(re.findall(r'print/(\d+)\.jpg',open('exhibit_v2.html').read())))))" \
+  | xargs -P 6 -I{} sh -c 'printf "%s %s\n" {} "$(curl -sSL -o /dev/null -w "%{http_code}" https://mobile311.sfgov.org/tickets/{})"' \
+  | awk '$2 != 200'
+```
+
+That should print nothing. A filing full of dead links to the City's own records
+would undo the point of citing them.
+
 Do not put an uncited statistic in a filing. If a canopy percentage or similar is
 wanted, carry its source with it.
 

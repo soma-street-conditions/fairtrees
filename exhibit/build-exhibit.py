@@ -154,6 +154,7 @@ oldest = sorted([c for c in op if has(c)], key=lambda c: c["o"])[:15]
 
 e = html.escape
 fmt = lambda n: f"{n:,}"
+TICKET = "https://mobile311.sfgov.org/tickets/"
 def pretty(iso, yr=True):
     if not iso: return "—"
     d = datetime.date.fromisoformat(iso)
@@ -229,7 +230,12 @@ td.n, th.n { text-align: right; white-space: nowrap; }
 .cap { font-size: 8.5pt; line-height: 1.3; margin-top: 4pt; }
 .cap b { display: block; font-weight: 700; }
 .cap .when { display: block; }
+/* The case number is a link to the City's own record for that ticket. Kept in
+   the caption grey, with a hairline underline so it reads as clickable on
+   screen and still looks deliberate in print. */
 .cap .id { display: block; font-size: 7.5pt; color: var(--grey); }
+.cap .id a { color: inherit; text-decoration: underline;
+             text-decoration-color: var(--hair); text-underline-offset: 1.5pt; }
 .foot { font-size: 8pt; color: var(--grey); border-top: 1pt solid var(--hair);
         padding-top: 5pt; margin-top: 9pt; }
 .lede { font-size: 10.5pt; }
@@ -310,7 +316,8 @@ def cell(c):
     return (f'<div class="cell"><img src="print/{c["id"]}.jpg" alt="">'
             f'<div class="cap"><b>{e(c["a"])}</b>'
             f'<span class="when">{short_date(c["o"])} &middot; {state}</span>'
-            f'<span class="id">#{e(c["id"])}</span></div></div>')
+            f'<span class="id"><a href="{TICKET}{e(c["id"])}">#{e(c["id"])}</a></span>'
+            f'</div></div>')
 
 WORDS = ["zero", "one", "two", "three", "four", "five", "six", "seven", "eight",
          "nine", "ten", "eleven", "twelve"]
@@ -416,10 +423,10 @@ cover = f"""
   2% of District 6&rsquo;s tree canopy gap.</p>
 
   <p class="small muted" style="margin-top:11pt">Every case in this document carries its 311
-  case number and can be verified independently at
-  mobile311.sfgov.org/tickets/&lt;case&nbsp;number&gt;. The complete set of
-  {fmt(sum(1 for c in win if has(c)))} photographs is published at fairtrees.org and is
-  available on request.</p>
+  case number, and <strong>each one is a link</strong> to the City&rsquo;s own record for that
+  ticket at <a href="https://mobile311.sfgov.org/">mobile311.sfgov.org</a>. The complete set of
+  {fmt(sum(1 for c in win if has(c)))} photographs is published at
+  <a href="https://fairtrees.org">fairtrees.org</a> and is available on request.</p>
 
   <p class="small muted" style="margin-top:13pt">Prepared by {e(SUBMITTER)}, {e(ORG)} &mdash;
   {pretty(TODAY.isoformat())}. Covers reports filed between {pretty(CUT)} and

@@ -37,6 +37,7 @@ def has(c):
         return False
     return os.path.exists(f"{SCR}/print/{c['id']}.jpg")
 norm = lambda a: re.sub(r"\s+", " ", a.strip().lower())
+days_open = lambda c: (TODAY - datetime.date.fromisoformat(c["o"])).days
 citywide = [c for c in cases if c["o"] and c["o"] >= CUT and c["d"]]
 d6 = [c for c in cases if c["d"] == "6"]
 win = [c for c in d6 if c["o"] and c["o"] >= CUT]
@@ -83,25 +84,72 @@ for addr, cs in by.items():
     if later:
         first = sorted(later, key=lambda x: x["o"])[0]
         reported_again.append(first)
-        if has(first):
+        if has(first) and days_open(first) >= 30:
             reported_again_photo.append(first)
 reported_again_photo.sort(key=lambda c: c["o"])
 
-def block(*street_names, limit=None, open_first=False):
+# A report filed last week is not evidence that anyone has been ignored.
+MIN_DAYS = 30
+# Four across holds three rows on a 0.9in-margin page.
+PER_PAGE = 12
+
+# The "reported again" page makes a specific argument about these cases, so it
+# has first claim on them. Reserved by address rather than by case id: the same
+# basin is often carried by several cases, and two of them on two pages reads
+# as padding just as plainly as one photograph printed twice.
+RESERVED = {norm(c["a"]) for c in reported_again_photo}
+
+street_of = lambda c: re.sub(r"^\d+\s+", "", c["a"]).strip().lower()
+num_of = lambda c: int(re.match(r"^(\d+)", c["a"]).group(1)) if re.match(r"^(\d+)", c["a"]) else 0
+
+
+def candidates(names=None, exclude=None):
+    """Photographed, still open, and open long enough to mean something.
+
+    Closed cases are kept off the photograph pages entirely. Each one hands the
+    department an opening -- "that case was closed, we handled it" -- and the
+    argument about what a closure note actually means belongs on page 3, where
+    it is properly framed.
+    """
+    sel = [c for c in win if has(c) and c["s"] and days_open(c) >= MIN_DAYS
+           and norm(c["a"]) not in RESERVED]
+    if names is not None:
+        sel = [c for c in sel if street_of(c) in names]
+    if exclude is not None:
+        sel = [c for c in sel if street_of(c) not in exclude]
+    return sel
+
+
+def block(*street_names, limit=PER_PAGE, exclude=None):
+    """One photograph per address, longest-waiting first, shown in street order.
+
+    Three frames of the same address reads as padding, and padding is the one
+    real risk of running long.
+    """
+    names = set(street_names) if street_names else None
+    best = {}
+    for c in candidates(names, exclude):
+        k = norm(c["a"])
+        if k not in best or days_open(c) > days_open(best[k]):
+            best[k] = c
+    chosen = sorted(best.values(), key=days_open, reverse=True)[:limit]
+    return sorted(chosen, key=lambda c: (street_of(c), num_of(c)))
+
+
+def addr_count(*street_names):
     names = set(street_names)
-    sel = [c for c in win if has(c)
-           and re.sub(r"^\d+\s+", "", c["a"]).strip().lower() in names]
-    if open_first:
-        # Twelve to a page, so spend them on the basins still waiting.
-        sel = [c for c in sel if c["s"]] + [c for c in sel if not c["s"]]
-        sel = sel[:limit or PER_PAGE]
-    num = lambda c: int(re.match(r"^(\d+)", c["a"]).group(1)) if re.match(r"^(\d+)", c["a"]) else 0
-    sel.sort(key=lambda c: (re.sub(r"^\d+\s+", "", c["a"]).strip().lower(), num(c)))
-    return sel[:limit] if limit else sel
+    return len({norm(c["a"]) for c in win if has(c) and street_of(c) in names})
 
 langton = block("langton st")
-china = block("china basin st")
-howard = block("howard st")
+ninth_harrison = block("9th st", "harrison st")
+china_howard = block("china basin st", "howard st")
+alleys = block("minna st", "natoma st", "stevenson st")
+folmis = block("folsom st", "mission st")
+market_num = block("market st", "7th st", "8th st", "10th st", "11th st")
+NAMED = {"langton st", "9th st", "harrison st", "china basin st", "howard st",
+         "minna st", "natoma st", "stevenson st", "folsom st", "mission st",
+         "market st", "7th st", "8th st", "10th st", "11th st"}
+elsewhere = block(exclude=NAMED)
 oldest = sorted([c for c in op if has(c)], key=lambda c: c["o"])[:15]
 
 e = html.escape
@@ -110,7 +158,6 @@ def pretty(iso, yr=True):
     if not iso: return "—"
     d = datetime.date.fromisoformat(iso)
     return d.strftime("%-d %B %Y") if yr else d.strftime("%-d %B")
-days_open = lambda c: (TODAY - datetime.date.fromisoformat(c["o"])).days
 
 CSS = """
 /* One sans family at two weights. Source Sans 3 is a text face rather than a
@@ -243,17 +290,39 @@ def short_date(iso):
     wrapped date sets every row to a different height."""
     return datetime.date.fromisoformat(iso).strftime("%-d %b %Y")
 
+# Closure reasons are rewritten rather than truncated: the raw strings run past
+# the caption box and stop mid-word.
+SHORT_OUTCOME = {
+    "Cancelled — planned maintenance": "closed, planned maintenance",
+    "Cancelled": "closed, cancelled",
+    "Marked resolved — no detail": "closed, no detail",
+    "Duplicate report": "closed, duplicate",
+    "Tree planted": "tree planted",
+    "Queued for planting": "queued for planting",
+}
+
 def cell(c):
-    state = (f'open {days_open(c)} days' if c["s"] else e(c["r"][:22]).lower())
+    if c["s"]:
+        d = days_open(c)
+        state = f'open {d} day' + ("" if d == 1 else "s")
+    else:
+        state = e(SHORT_OUTCOME.get(c["r"], "closed"))
     return (f'<div class="cell"><img src="print/{c["id"]}.jpg" alt="">'
             f'<div class="cap"><b>{e(c["a"])}</b>'
             f'<span class="when">{short_date(c["o"])} &middot; {state}</span>'
             f'<span class="id">#{e(c["id"])}</span></div></div>')
 
-PER_PAGE = 12
+WORDS = ["zero", "one", "two", "three", "four", "five", "six", "seven", "eight",
+         "nine", "ten", "eleven", "twelve"]
+words = lambda n: WORDS[n] if n < len(WORDS) else fmt(n)
 
-def photo_page(title, lede, items, foot, cols=4):
+
+def photo_page(title, lede, items, foot, cols=None):
     shown = items[:PER_PAGE]
+    # Nine across four columns leaves a row of one. Three columns fills it, and
+    # the photographs come out larger for it.
+    if cols is None:
+        cols = 3 if len(shown) == 9 else 4
     return (f'<div class="page"><h2>{title}</h2><p class="lede">{lede}</p>'
             f'<div class="grid" style="grid-template-columns:repeat({cols},1fr)">{"".join(cell(c) for c in shown)}</div>'
             f'<div class="foot">{foot}</div></div>')
@@ -466,128 +535,116 @@ comparison = f"""
 </div>
 """
 
-lang_open = sum(1 for c in langton if c["s"])
-lang_days = sorted(days_open(c) for c in langton if c["s"])
-page_langton = photo_page(
+def spread(items):
+    d = sorted(days_open(c) for c in items)
+    return d[0], d[-1]
+
+
+def same_day(items):
+    """The busiest single filing date on a page, as (count, pretty date)."""
+    day, n = collections.Counter(c["o"] for c in items).most_common(1)[0]
+    return n, pretty(day)
+
+
+def page(title, lede, items, foot):
+    return photo_page(title, lede, items, foot)
+
+
+lang_lo, lang_hi = spread(langton)
+lang_same = same_day(langton)
+page_langton = page(
     "One block: Langton Street",
     f"Langton Street is a two-block alley between Folsom and Howard. Residents photographed "
-    f"<strong>{fmt(len(langton))}</strong> empty basins along it and "
-    f"<strong>all {fmt(lang_open)} are still open</strong>, between {min(lang_days)} and "
-    f"{max(lang_days)} days after they were reported. Twelve are shown here, in street-number "
-    f"order. Three addresses appear twice: reported once in December 2025, again in March 2026, "
-    f"both reports still open.",
+    f"empty basins at <strong>{words(addr_count('langton st'))} addresses</strong> along it, and "
+    f"<strong>every one is still open</strong> &mdash; between {lang_lo} and {lang_hi} days "
+    f"after it was reported. {words(lang_same[0]).capitalize()} were filed on a single day, "
+    f"{lang_same[1]}.",
     langton,
-    "Every photograph was taken and submitted by a resident as part of their own 311 report.")
+    "One photograph per address. Every one was taken by the resident who filed the report.")
 
-page_again = photo_page(
+again_lo, again_hi = spread(reported_again_photo)
+page_again = page(
     "Closed as &ldquo;Planned&nbsp;Maintenance,&rdquo; then reported again",
     f"Each of these basins was among the {fmt(len(mass_d6))} District 6 reports the City closed on "
-    f"{pretty(MASS)}. Each was then reported again by a resident &mdash; between 15 and 264 days "
-    f"later &mdash; and photographed. <strong>Every one of these newer reports is still open.</strong> "
-    f"The date shown is the date of the new report, not the closed one.",
+    f"{pretty(MASS)}. Each was reported again afterwards by a resident, and photographed. "
+    f"<strong>Every one of these newer reports is still open</strong>, between {again_lo} and "
+    f"{again_hi} days on. The date shown is the date of the new report, not the closed one.",
     reported_again_photo,
-    "The closure of a 311 case is not evidence that a tree was planted.", cols=4)
+    "The closure of a 311 case is not evidence that a tree was planted.")
 
-mix = china + howard[:max(0, 15 - len(china))]
-china_days = sorted(days_open(c) for c in china if c["s"])
-page_mix = photo_page(
-    "Two more streets: China Basin and Howard",
-    f"<strong>{fmt(len(china))}</strong> basins on China Basin Street in Mission Bay, "
-    f"<strong>all still open</strong> &mdash; seven reported on one day, 22 February 2026, and "
-    f"open {max(china_days)} days since. Two have been empty long enough that wild fennel has "
-    f"filled them; the green in those frames is a weed, not a tree. They are followed by basins "
-    f"on Howard Street, where every photographed report in this period is also still open.",
-    mix,
-    "Addresses run in street-number order.")
+ch_lo, ch_hi = spread(china_howard)
+page_china_howard = page(
+    "China Basin Street and Howard Street",
+    f"China Basin Street runs through Mission Bay, the newest housing in the district; Howard "
+    f"carries four lanes through the oldest. Residents photographed empty basins at "
+    f"<strong>{fmt(addr_count('china basin st', 'howard st'))} addresses</strong> across the two. "
+    f"<strong>All {words(len(china_howard))} here are still open</strong>, between {ch_lo} and "
+    f"{ch_hi} days on. Two of the China Basin basins have stood empty long enough for wild fennel "
+    f"to fill them; the green in those frames is a weed, not a tree.",
+    china_howard,
+    "China Basin Street first, then Howard, each in street-number order.")
 
+nh_lo, nh_hi = spread(ninth_harrison)
+page_ninth_harrison = page(
+    "9th Street and Harrison Street",
+    f"9th Street is six lanes wide with sidewalks to match, and carries the barricade and white "
+    f"basin outline on the cover of this document. Harrison runs the width of the district. "
+    f"Residents photographed empty basins at "
+    f"<strong>{fmt(addr_count('9th st', 'harrison st'))} addresses</strong> along the two. "
+    f"<strong>All {words(len(ninth_harrison))} here are still open</strong>, between {nh_lo} and "
+    f"{nh_hi} days on.",
+    ninth_harrison,
+    "One Harrison Street site is withheld: trees were planted there after the photograph was "
+    "taken, although its 311 cases remain open.")
 
-def page_stats(items):
-    op = [c for c in items if c["s"]]
-    dd = sorted(days_open(c) for c in op)
-    return len(items), len(op), (min(dd) if dd else 0), (max(dd) if dd else 0)
-
-# --- 9th Street -----------------------------------------------------------
-ninth = block("9th st", open_first=True)
-n_n, n_o, n_lo, n_hi = page_stats(ninth)
-page_9th = photo_page(
-    "9th Street",
-    f"9th Street is six lanes wide with sidewalks to match, and it carries the barricade and the "
-    f"white basin outline on the cover of this document. Residents photographed empty basins at "
-    f"<strong>{fmt(len(block('9th st')))}</strong> addresses along it in this period. "
-    f"<strong>{fmt(n_o)} of the twelve shown here are still open</strong>, between {n_lo} and "
-    f"{n_hi} days after they were reported.",
-    ninth,
-    "Every photograph was taken by the resident who filed the report.")
-
-# --- Harrison Street ------------------------------------------------------
-harrison = block("harrison st", open_first=True)
-h_n, h_o, h_lo, h_hi = page_stats(harrison)
-page_harrison = photo_page(
-    "Harrison Street",
-    f"Harrison runs the width of the district, four lanes and a bike lane, from the Embarcadero to "
-    f"the Mission. These twelve basins were photographed along it; "
-    f"<strong>{fmt(h_o)} are still open</strong>, the oldest {h_hi} days after it was reported. "
-    f"Five of them were reported on a single day, 23 January 2026.",
-    harrison,
-    "One further Harrison Street site has been withheld: trees were planted there after the "
-    "photograph was taken, although its 311 cases remain open.")
-
-# --- Market Street --------------------------------------------------------
-market = block("market st", open_first=True)
-m_n, m_o, m_lo, m_hi = page_stats(market)
-page_market = photo_page(
-    "Market Street",
-    f"Market Street is the City&rsquo;s principal civic address and the one visitors walk. "
-    f"Residents photographed empty basins at <strong>{fmt(len(block('market st')))}</strong> "
-    f"addresses along the District 6 stretch of it. {fmt(m_o)} of the twelve here are still open, "
-    f"the oldest {m_hi} days on. The remainder were closed without a planting recorded.",
-    market,
-    "Addresses run in street-number order.")
-
-# --- the alleys -----------------------------------------------------------
-alleys = block("minna st", "natoma st", "stevenson st", open_first=True)
-a_n, a_o, a_lo, a_hi = page_stats(alleys)
-page_alleys = photo_page(
+al_lo, al_hi = spread(alleys)
+page_alleys = page(
     "The alleys: Minna, Natoma and Stevenson",
-    f"Minna, Natoma and Stevenson run parallel between Mission and Howard and carry as much "
-    f"pedestrian traffic as some of the numbered streets. Residents photographed "
-    f"<strong>{fmt(len(block('minna st', 'natoma st', 'stevenson st')))}</strong> empty basins "
-    f"across the three. <strong>{fmt(a_o)} of the twelve shown are still open</strong>, between "
-    f"{a_lo} and {a_hi} days after they were reported. 548 Stevenson, reported six times in one "
-    f"year, is one of these addresses.",
+    f"Minna, Natoma and Stevenson run parallel between Mission and Howard and carry as much foot "
+    f"traffic as some of the numbered streets. Residents photographed empty basins at "
+    f"<strong>{fmt(addr_count('minna st', 'natoma st', 'stevenson st'))} addresses</strong> across "
+    f"the three. <strong>All {words(len(alleys))} here are still open</strong>, between {al_lo} and "
+    f"{al_hi} days on. 548 Stevenson, reported six times in one year, is one of them.",
     alleys,
     "Grouped by street, then by street number.")
 
-# --- Folsom and Mission ---------------------------------------------------
-folmis = block("folsom st", "mission st", open_first=True)
-f_n, f_o, f_lo, f_hi = page_stats(folmis)
-page_folmis = photo_page(
+fm_lo, fm_hi = spread(folmis)
+page_folmis = page(
     "Folsom Street and Mission Street",
-    f"Two of the thoroughfares named on page 2. Residents photographed "
-    f"<strong>{fmt(len(block('folsom st', 'mission st')))}</strong> empty basins along them; "
-    f"<strong>{fmt(f_o)} of the twelve here are still open</strong>, the oldest {f_hi} days after "
+    f"Two of the thoroughfares named on page 2. Residents photographed empty basins at "
+    f"<strong>{fmt(addr_count('folsom st', 'mission st'))} addresses</strong> along them. "
+    f"<strong>All {words(len(folmis))} here are still open</strong>, the oldest {fm_hi} days after "
     f"it was reported.",
     folmis,
     "Folsom Street first, then Mission, each in street-number order.")
 
-# --- the remaining numbered streets --------------------------------------
-numbered = block("7th st", "8th st", "10th st", "11th st", open_first=True)
-u_n, u_o, u_lo, u_hi = page_stats(numbered)
-page_numbered = photo_page(
-    "7th, 8th, 10th and 11th Streets",
-    f"The rest of the numbered thoroughfares named on page 2, each of them four lanes or more. "
-    f"Residents photographed "
-    f"<strong>{fmt(len(block('7th st', '8th st', '10th st', '11th st')))}</strong> empty basins "
-    f"across the four. {fmt(u_o)} of the twelve shown are still open, the oldest {u_hi} days on.",
-    numbered,
+mn_lo, mn_hi = spread(market_num)
+page_market_num = page(
+    "Market Street and the numbered thoroughfares",
+    f"Market Street is the City&rsquo;s principal civic address and the one visitors walk; 7th, "
+    f"8th, 10th and 11th are four lanes or more apiece. Residents photographed empty basins at "
+    f"<strong>{fmt(addr_count('market st', '7th st', '8th st', '10th st', '11th st'))} "
+    f"addresses</strong> across the five. <strong>All {words(len(market_num))} here are still "
+    f"open</strong>, between {mn_lo} and {mn_hi} days on.",
+    market_num,
     "Grouped by street, then by street number.")
+
+el_lo, el_hi = spread(elsewhere)
+page_elsewhere = page(
+    "The rest of the district",
+    f"Not every empty basin sits on a street with enough of them to fill a page. These are on "
+    f"Otis, Grove, Moss, Beale, Clarence, Page, Mission Rock, Terry A Francois and the "
+    f"Embarcadero, among others. <strong>All {words(len(elsewhere))} are still open</strong>, "
+    f"between {el_lo} and {el_hi} days on.",
+    elsewhere,
+    "One photograph per address, longest-waiting first.")
 
 sites = f"""
 <div class="page">
   <h2>The sites already exist</h2>
 
-  <p>Public Works and the Urban Forestry Council tell this district it has too few places to put
-  a tree, and that its streets are too narrow. The City&rsquo;s own reports say otherwise.
+  <p>Public Works tells this district it has too few places to put a tree, and that its streets
+  are too narrow. The City&rsquo;s own reports say otherwise.
   <strong>{fmt(len(on_main))}
   of the {fmt(n_win)} empty basins reported here &mdash; half of them &mdash; are on the
   district&rsquo;s widest thoroughfares</strong>: 6th, 7th, 8th, 9th, 10th, 11th and 12th Streets,
@@ -624,8 +681,9 @@ doc = (f'<!doctype html><html><head><meta charset="utf-8">'
        f'<title>{fmt(len(op))} Empty Tree Basins, Still Waiting — Supervisor District 6</title>'
        f'<style>{CSS}</style></head><body>'
        + cover + sites + findings + comparison
-       + page_langton + page_again + page_mix
-       + page_9th + page_harrison + page_market + page_alleys + page_folmis + page_numbered
+       + page_langton + page_again + page_ninth_harrison
+       + page_alleys + page_folmis + page_china_howard + page_market_num
+       + page_elsewhere
        + '</body></html>')
 open(f"{SCR}/exhibit_v2.html", "w").write(doc)
 
@@ -635,7 +693,17 @@ print(f"reports={n_win} open={len(op)} ({round(len(op)/n_win*100)}%) closed={len
 print(f"mass closure {MASS}: citywide={len(mass_all)} d6={len(mass_d6)} "
       f"re-reported={len(reported_again)} (photo {len(reported_again_photo)})")
 print(f"548 Stevenson open reports={len(stevenson)}")
-print(f"photo pages: langton={len(langton)} again={len(reported_again_photo)} mix={len(mix)} "
-      f"9th={len(ninth)} harrison={len(harrison)} market={len(market)} alleys={len(alleys)} "
-      f"folsom+mission={len(folmis)} numbered={len(numbered)}")
+shown_ids = set()
+for nm, it in (("langton", langton), ("again", reported_again_photo),
+               ("9th+harrison", ninth_harrison), ("alleys", alleys),
+               ("folsom+mission", folmis), ("china+howard", china_howard),
+               ("market+numbered", market_num), ("elsewhere", elsewhere)):
+    addrs = {norm(c["a"]) for c in it}
+    ids = {norm(c["a"]) for c in it}
+    assert len(addrs) == len(it), f"{nm}: repeated address"
+    assert not (ids & shown_ids), f"{nm}: address already on another page"
+    shown_ids |= ids
+    assert all(c["s"] and days_open(c) >= MIN_DAYS for c in it), f"{nm}: closed or too new"
+    print(f"  {nm:<16} {len(it):>2} photos, {len(addrs):>2} addresses, "
+          f"{min(days_open(c) for c in it)}-{max(days_open(c) for c in it)} days open")
 print(f"quoted cases={len(nores)} ({nores_from}..{nores_to})")

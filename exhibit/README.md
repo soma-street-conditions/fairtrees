@@ -1,6 +1,6 @@
 # Hearing exhibit generator
 
-Builds a thirteen-page printable PDF of empty street-tree basin reports for one
+Builds a twelve-page printable PDF of empty street-tree basin reports for one
 supervisor district, from the same San Francisco 311 data as the tracker.
 
 ```
@@ -10,7 +10,7 @@ supervisor district, from the same San Francisco 311 data as the tracker.
 3   Findings    the mass closure, repeat reports, the locator map, how
                 closed cases were closed
 4   Comparison  all eleven districts as a bar chart, with the table beneath
-5-13 Blocks     photographs grouped by street, twelve to a page
+5-12 Blocks     photographs grouped by street, up to twelve to a page
 ```
 
 There is no method page. Source, date range, dataset, authorship and how to
@@ -67,7 +67,28 @@ above do that work. Days-open figures are bold ink, not an error state.
 four-across grid, which sets every row to a different height and makes the page
 look ragged. `26 Dec 2025 · open 266 days` on one line keeps the grid locked.
 
-**Four across, twelve to a page.** At five across the basin — the thing the
+**Photograph pages carry open cases only, and one photograph per address.**
+Four rules, enforced by assertions at the end of the build rather than by
+care:
+
+- *Open only.* A closed case on a photograph page hands the department an
+  opening — "that case was closed, we handled it" — and the argument about what
+  a closure note actually means belongs on page 3, where it is framed properly.
+- *At least 30 days open.* A report filed last week is not evidence that anyone
+  has been ignored, and printing one invites exactly the wrong response.
+- *One photograph per address.* Three frames of 346 9th Street reads as
+  padding, and padding is the one real risk of running long. Where an address
+  carries several cases, the longest-waiting one is shown.
+- *No address on two pages.* The "reported again" page has first claim on its
+  cases; the street pages skip those addresses. Reserved by address, not by
+  case id, since the same basin is often carried by several cases.
+
+A page therefore holds *up to* twelve, not exactly twelve. Say what is on the
+page — "All eleven here are still open" — and never let a count and its spelled
+form drift apart ("12 of the twelve shown here" was a template filling both
+slots).
+
+**Four across, up to twelve to a page.** At five across the basin — the thing the
 reader is meant to look at — stops being legible. Four fits three rows at 0.9in
 margins, so a photo page carries twelve and the lede says so.
 
@@ -174,6 +195,10 @@ the top. The cover says "Open cases as of <date>" instead.
 the City "has already cut thousands of basins here, and has marked out where the
 next ones should go" — directly under a photograph of spray paint on uncut
 pavement. Spray paint is not a cut basin.
+
+**Closure reasons are rewritten, not truncated.** The raw 311 strings run past
+the caption box and stop mid-word ("cancelled — planned ma"). `SHORT_OUTCOME`
+maps them; add to it rather than slicing.
 
 Do not put an uncited statistic in a filing. If a canopy percentage or similar is
 wanted, carry its source with it.

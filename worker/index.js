@@ -57,13 +57,28 @@ async function snapshotResponse(request, env, extra = {}) {
   return json({ ...payload, source: "snapshot", ...extra }, { maxAge: 300, stale: CASES_TTL });
 }
 
-/** Pull fresh data and park it in the edge cache for subsequent visitors. */
+/**
+ * Pull fresh data and park it in the edge cache for subsequent visitors.
+ *
+ * Failures are logged rather than swallowed. This runs in waitUntil, behind a
+ * response that has already gone out, so a broken upstream shows up as a site
+ * quietly serving the shipped snapshot for ever -- indistinguishable from a
+ * site that is working. The log line is the only way to tell the difference,
+ * and [observability] in wrangler.toml is what makes it readable.
+ */
 async function refreshCases(env, cache, cacheKey) {
+  const started = Date.now();
   try {
     const payload = await fetchLiveCases();
     await cache.put(cacheKey, json(payload, { maxAge: CASES_TTL, stale: CASES_TTL * 4 }));
-  } catch {
+    console.log(
+      `cases refreshed: ${payload.count} cases in ${Date.now() - started}ms`,
+    );
+  } catch (err) {
     // The snapshot keeps serving; the next cold request will try again.
+    console.error(
+      `cases refresh FAILED after ${Date.now() - started}ms: ${err && err.message}`,
+    );
   }
 }
 

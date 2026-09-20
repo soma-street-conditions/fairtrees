@@ -110,6 +110,36 @@ the `MX` pair especially, or email forwarding stops:
 | TXT | `fairtrees.org` | `v=spf1 include:_spf.porkbun.com ~all` | n/a |
 | TXT | `_dmarc` | `v=DMARC1; p=none;` | n/a |
 
+Verified against live DNS on 20 September 2026: those six are the entire zone.
+No DKIM, no mail host, no other subdomain — so the table above is the whole job,
+not a starting point.
+
+**Do it on a quiet day, never before a deadline.** The tracker works perfectly
+well on its `workers.dev` URL, and a link from the campaign site costs nothing.
+A branded hostname is not worth putting `fairtrees.org` at risk the week
+something is due.
+
+The order that makes it safe:
+
+1. Add the zone in Cloudflare and enter all six records **before** touching
+   Porkbun. Nothing changes yet — the nameservers still point at Porkbun, so
+   the live site is unaffected while you check your work.
+2. Confirm the apex `A` and `www` are **grey-clouded**. This is the one step
+   that breaks the campaign site: Carrd's `172.66.0.70` is inside Cloudflare's
+   own range, and Cloudflare will not proxy to itself. Cloudflare's import
+   often defaults records to proxied, so check rather than assume.
+3. Lower the TTLs at Porkbun to 5 minutes and wait for the old ones to expire.
+   This is what makes step 5 fast if anything is wrong.
+4. Switch the nameservers at Porkbun.
+5. **Rollback:** point the nameservers back at
+   `curitiba/fortaleza/maceio/salvador.ns.porkbun.com`. The Porkbun zone is
+   still there and still correct — moving nameservers does not delete it — so
+   recovery is one change, bounded by the TTL from step 3.
+
+Check after the move: `fairtrees.org` and `www` still load the campaign site,
+and a test email to the forwarding address still arrives. Email is the failure
+nobody notices for days.
+
 ### Serving under a path
 
 `BASE_PATH` in `wrangler.toml` makes the Worker serve from a subdirectory (it
